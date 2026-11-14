@@ -208,3 +208,15 @@ voda. Vše přes Voxario Studio Engine.
   klenbami přes Azure Ocean vystoupá (max. 11 %, mírné klenutí nad mořem) na útes hlavního ostrova nad údolím
   Serpentine; konec mostovky se zanoří pod terén. Mostovka je vždy ≥ 0,55 m nad terénem (detail neprorůstá),
   kolize celého modelu, lucerny po 60 m (světlo v noci), pod mostem na souši nic neroste. Samotest `valoria`: v5–v7.
+- Krajina AAA (Eryndor 0.13.0, engine v1.22.0):
+  - Voda `style = "realistic"`: vlny na pixel bez aliasingu (pryč „kostičky“ z mřížky moře), fyzikální barva,
+    krajková pěna. Záběry před/po: `docs/screenshots/voda-aaa`.
+  - Tráva `world.grass`: trsy z fotoskenu `grass_medium_01` (`tools/eryndor_foliage.py`, karty s výřezem,
+    materiál `foliage`) rostou hustě kolem kamery všude, kde je povrch „tráva“; ne na stavbách, mostech a cestách.
+  - Stromy: listnáče (kůra `bark_brown_02`, koruna z karet větviček složených z fotek listů `island_tree_02`)
+    a smrky (kůra `pine_bark`, karty jehličí `fir_tree_01`); engine kompenzuje alfu v mipmapách (v dálce neholé).
+  - Cesty `world.road` (`tools/eryndor_roads.py`, A* po terénu, voda zakázaná mimo mosty): Královská cesta
+    z obloukového mostu Valorie (strážnice, lucerny) přes kamenný most nad lávovou řekou k rozcestí u základny,
+    odtud cesta k zamrzlému jezeru, lesní cesta přes Serpentine k elfí svatyni a Tisíciletému stromu,
+    Popelavá stezka k Ignis Scar a Krystalová stezka k trhlině. Krajnice cest jsou ve splat mapách hlína.
+  - Samotest `krajina` (k1–k10). Zbývá: mapa (M) zatím cesty nekreslí.
