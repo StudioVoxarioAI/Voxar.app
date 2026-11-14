@@ -20,10 +20,31 @@ local function ground(x, z) return map.HeightAt(x, z) end
 M.Ground = ground
 
 -- místa, kde nemá nic růst (stavby, cesty k nim)
+-- (seznam pro malé oblasti + mřížka 64 m pro dlouhé cesty – tisíce kruhů by rozmisťování zpomalily)
 local avoid = {}
+local avoidGrid = {}
+local function gridKey(cx, cz) return cx * 100000 + cz end
+local function avoidAdd(x, z, r)
+    local c0, c1 = floor((x - r) / 64), floor((x + r) / 64)
+    local r0, r1 = floor((z - r) / 64), floor((z + r) / 64)
+    for cx = c0, c1 do
+        for cz = r0, r1 do
+            local k = gridKey(cx, cz)
+            local list = avoidGrid[k]
+            if not list then list = {}; avoidGrid[k] = list end
+            list[#list + 1] = { x = x, z = z, r = r }
+        end
+    end
+end
 local function free(x, z)
     for _, p in ipairs(avoid) do
         if (x - p.x) ^ 2 + (z - p.z) ^ 2 < p.r * p.r then return false end
+    end
+    local list = avoidGrid[gridKey(floor(x / 64), floor(z / 64))]
+    if list then
+        for _, p in ipairs(list) do
+            if (x - p.x) ^ 2 + (z - p.z) ^ 2 < p.r * p.r then return false end
+        end
     end
     return true
 end
@@ -110,7 +131,7 @@ function M.BuildTerrain()
     -- realistická voda (engine ≥ 1.16): Gerstnerovy vlny po větru, pohlcování světla (průhledná mělčina, tyrkys,
     -- temně modrá hloubka), měkká pěna příboje, příliv a odliv
     W.water(0, map.SeaY, 0, 1200, 1200, { color = { 0.5, 0.5, 0.5 }, wave = 0.55, wavelength = 18, foam = 1.2,
-        shallow = 8, bed = "Textures/terrain/pbr/pisek_albedo.jpg", tide = 0.35, speed = 1.0 })
+        shallow = 8, bed = "Textures/terrain/pbr/pisek_albedo.jpg", tide = 0.35, speed = 1.0, style = "realistic" })
 end
 
 -- mosty přes Serpentine River (dřevěná mostovka na kamenných pilířích, s kolizí)
@@ -193,14 +214,10 @@ function M.BuildVerdant()
     W.instances("Models/nature/mushrooms.glb", scatter(2500, "v", { hmin = 2.5 }), { distance = 120, detail = true })
     W.instances("Models/nature/mushroom_big.glb", scatter(300, "v", { hmin = 2.5, smin = 0.8, smax = 1.5 }),
         { distance = 260, collider = "capsule", radius = 0.3, height = 3 })
-    W.instances("Models/nature/grass.glb", scatter(30000, "v", { hmin = 2.0, smin = 1.3, smax = 2.2, tries = 3 }),
-        { distance = 85, detail = true, wind = 0.14 })
 end
 
 -- louky kolem řeky (střed kontinentu) a pobřeží
 function M.BuildMeadows()
-    W.instances("Models/nature/grass.glb", scatter(40000, "m", { hmin = 2.0, smin = 1.3, smax = 2.4, tries = 3 }),
-        { distance = 85, detail = true, wind = 0.14 })
     W.instances("Models/nature/tree_1.glb", scatter(700, "m", { hmin = 3, slope = 0.25, smin = 1.0, smax = 1.7 }),
         { collider = "capsule", radius = 0.35, height = 4, distance = 600, wind = 0.1 })
     for k = 0, 2 do
@@ -334,11 +351,66 @@ function M.Update(dt)
     end
 end
 
+-- cesty napříč regiony (engine ≥ 1.22, world.road; tools/eryndor_roads.py): pás z fotoskenu kamení / dlažby
+-- položený na terén, přes lávovou řeku kamenný most; u přístání obloukového mostu z Valorie strážnice
+M.Roads = require("eryndor.roads_data")
+M.RoadEntities = {}
+function M.BuildRoads()
+    local bridgeIndex = 0
+    for _, road in ipairs(M.Roads) do
+        local tex = "Textures/roads/" .. road.surface
+        for _, seg in ipairs(road.segments) do
+            M.RoadEntities[#M.RoadEntities + 1] = W.road({ points = seg, width = road.width, tile = 3.0,
+                texture = tex .. "_basecolor.jpg", normal = tex .. "_normal.jpg", orm = tex .. "_orm.jpg",
+                min_height = map.SeaY + 0.4, distance = 1400, taper = 10 })
+            for i = 1, #seg, 2 do avoidAdd(seg[i][1], seg[i][2], road.width * 0.5 + 3) end
+        end
+        for _, b in ipairs(road.lava_bridges) do
+            W.spawn("Models/roads/lava_bridge_" .. bridgeIndex .. ".glb", b[1], 0, b[2],
+                { name = "Most přes lávovou řeku", collider = "mesh" })
+            avoidAdd((b[1] + b[3]) / 2, (b[2] + b[4]) / 2, 60)
+            bridgeIndex = bridgeIndex + 1
+        end
+    end
+    -- strážnice Valorie u přístání obloukového mostu: věž, lucerny, prapor
+    local sky = require("eryndor.valoria").Skybridge
+    local l = sky.landing
+    local wx, wz = l.x - 40, l.z + 22
+    W.spawn("Models/build/watchtower.glb", wx, ground(wx, wz) - 0.3, wz, { yaw = 110, name = "Strážnice Valorie",
+        collider = "mesh" })
+    W.spawn("light", wx, ground(wx, wz) + 8.4, wz, { light = { color = { 1.0, 0.7, 0.4 }, intensity = 40, range = 22,
+        night_only = true } })
+    for i = -1, 1, 2 do
+        local x, z = l.x - 30 + i * 2, l.z - 14 * i
+        W.spawn("Models/build/lamp.glb", x, ground(x, z) - 0.05, z, { name = "Lucerna u cesty" })
+        W.spawn("light", x, ground(x, z) + 2.6, z, { light = { color = { 1.0, 0.75, 0.4 }, intensity = 12, range = 14,
+            night_only = true } })
+    end
+    avoid[#avoid + 1] = { x = wx, z = wz, r = 12 }
+    avoid[#avoid + 1] = { x = l.x, z = l.z, r = 30 }
+end
+
+-- hustá fotorealistická tráva (engine ≥ 1.22, world.grass): trsy z fotoskenů rostou všude, kde je povrch terénu
+-- „tráva“ (louky, lesy, Valoria) – kolem kamery, do dálky řídnou; ne na stavbách, mostech, dlažbě ani cestách
+function M.BuildGrass()
+    local exclude = {}
+    for _, a in ipairs(avoid) do exclude[#exclude + 1] = { a.x, a.z, a.r } end
+    -- Valoria: ulice, Most hrdinů a hrad
+    for z = 2300, 2680, 10 do exclude[#exclude + 1] = { 3000, z, 13 } end
+    exclude[#exclude + 1] = { 3000, 2165, 32 }
+    for _, r in ipairs(M.RoadExclude or {}) do exclude[#exclude + 1] = r end
+    M.grass = W.grass({ models = { "Models/nature/grass_clump_0.glb", "Models/nature/grass_clump_1.glb",
+                                   "Models/nature/grass_clump_2.glb" },
+        layers = { 1 }, threshold = 0.3, density = 7.0, radius = 70, min_scale = 0.75, max_scale = 1.35,
+        max_slope = 36, min_height = map.SeaY + 0.6, wind = 0.12, tint = 0.2, exclude = exclude })
+end
+
 function M.Build()
     M.BuildTerrain()
     local valoria = require("eryndor.valoria")
     valoria.Build()
     for _, a in ipairs(valoria.SkybridgeAvoid) do avoid[#avoid + 1] = a end
+    M.BuildRoads()
     M.BuildBridges()
     M.BuildOutpost()
     M.BuildVerdant()
@@ -347,6 +419,7 @@ function M.Build()
     M.BuildIgnis()
     M.BuildCrystalarium()
     M.BuildOcean()
+    M.BuildGrass()
 end
 
 return M

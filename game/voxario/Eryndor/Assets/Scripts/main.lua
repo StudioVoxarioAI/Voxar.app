@@ -45,6 +45,44 @@ function Selftest()
         timer.sleep(wait or 2.5)
         shot(name)
     end
+    if only == "krajina" then
+        -- tráva (world.grass), fotorealistické stromy, cesty a voda (engine ≥ 1.22)
+        _G.world.environment({ time_of_day = 10.5 })
+        _G.world.weather({ rain = 0, storm = 0, wind = 0.35, instant = true })
+        if graphics and graphics.detail_density then graphics.detail_density(1.0) end
+        local s, gt, lake = map.Start, map.Giant, map.FrozenLake
+        timer.sleep(2)
+        view("k1-louka-zblizka", s.x + 40, 1.7, s.z + 30, s.x + 70, 1.0, s.z + 60, 4)
+        view("k2-louka-siroko", s.x + 20, 14, s.z - 40, s.x + 160, 2, s.z + 120, 4)
+        view("k3-les-verdant", gt.x + 70, 2.0, gt.z + 50, gt.x + 20, 6, gt.z + 10, 4)
+        view("k4-smrky", lake.x + 260, 3.0, lake.z + 200, lake.x + 120, 12, lake.z + 80, 4)
+        lookFrom(3070, valoria.BridgeY + 5, 2700, 2960, valoria.BridgeY + 4, 2560); timer.sleep(4); shot("k5-valoria-trava")
+        local sky = valoria.Skybridge.points
+        local e = sky[#sky]
+        view("k6-cesta-od-mostu", e[1] - 30, 3.0, e[2] - 10, e[1] - 140, 1, e[2] - 60, 4)
+        -- cesty: královská cesta, most přes lávu, cesta k zamrzlému jezeru
+        local roads = world.Roads
+        local royal = roads[1].segments[1]
+        local p1, p2 = royal[#royal - 25], royal[#royal - 15]
+        view("k8-kralovska-cesta", p1[1], 2.2, p1[2], p2[1], 1.0, p2[2], 4)
+        local lb = roads[1].lava_bridges[1]
+        if lb then
+            local mx, mz = (lb[1] + lb[3]) / 2, (lb[2] + lb[4]) / 2
+            local dx, dz = lb[3] - lb[1], lb[4] - lb[2]
+            local len = math.sqrt(dx * dx + dz * dz)
+            local cx, cz = mx - dz / len * 110, mz + dx / len * 110   -- kolmo k mostu, z boku
+            lookFrom(cx, math.max(G(cx, cz), G(mx, mz)) + 45, cz, mx, G(mx, mz) + 8, mz)
+            timer.sleep(4); shot("k9-most-pres-lavu")
+        end
+        local lakeRoad = roads[2].segments[#roads[2].segments]
+        local q1, q2 = lakeRoad[#lakeRoad - 12], lakeRoad[#lakeRoad]
+        view("k10-cesta-k-jezeru", q1[1], 2.2, q1[2], q2[1], 1.0, q2[2], 4)
+        _G.world.environment({ time_of_day = 18.4 })
+        view("k7-louka-vecer", s.x + 40, 1.7, s.z + 30, s.x + 140, 2.0, s.z + 70, 4)
+        game.log("SELFTEST hotovo")
+        game.quit()
+        return
+    end
     if only == "teren" then
         -- fotorealistické PBR povrchy terénu (engine ≥ 1.19): každý biom zblízka a z výšky, útesy triplanárně
         _G.world.environment({ time_of_day = 10.5 })

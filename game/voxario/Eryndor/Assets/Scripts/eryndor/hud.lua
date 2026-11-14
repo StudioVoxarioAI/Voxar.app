@@ -249,8 +249,28 @@ function M.DrawWorldMap()
         local lx, ly = at(l[1][1] or l[1].x, l[1][2] or l[1].z)
         ui.text(lx, ly, l[2], { align = "center", color = l[3], shadow = true })
     end
+    -- cesty (tečky po ose) a obloukový most do Valorie
+    local okRoads, roads = pcall(require, "eryndor.roads_data")
+    if okRoads then
+        for _, r in ipairs(roads) do
+            local color = r.surface == "stone" and "#e8d9b0" or "#c9a46a"
+            for _, seg in ipairs(r.segments) do
+                for i = 1, #seg, 2 do
+                    local rx, ry = at(seg[i][1], seg[i][2])
+                    ui.rect(rx - 1, ry - 1, 3, 3, color, 1)
+                end
+            end
+        end
+    end
+    local okSky, sky = pcall(require, "eryndor.skybridge_data")
+    if okSky then
+        for i = 1, #sky.points, 3 do
+            local bx, by = at(sky.points[i][1], sky.points[i][2])
+            ui.rect(bx - 1, by - 1, 3, 3, "#f0e6c8", 1)
+        end
+    end
     -- body zájmu
-    local pois = { { map.Start, "Základna Serpentine" }, { map.Giant, "Tisíciletý strom" }, { map.Shrine, "Elfí svatyně" },
+    local pois = { { map.Start, "Základna Serpentine" }, { { x = 3000, z = 2300 }, "Valoria" }, { map.Giant, "Tisíciletý strom" }, { map.Shrine, "Elfí svatyně" },
                    { map.Rift, "Stínová trhlina" }, { map.DragonLair, "Zamrzlé jezero" }, { map.SpiderNest, "Sopky" } }
     for _, p in ipairs(pois) do
         local lx, ly = at(p[1].x, p[1].z)

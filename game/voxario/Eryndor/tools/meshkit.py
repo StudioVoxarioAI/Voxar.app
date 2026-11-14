@@ -52,6 +52,7 @@ class Mesh:
         self.C = np.ones((n, 4), np.float32) if C is None else np.asarray(C, np.float32)
         self.B = np.zeros(n, np.int64) if B is None else np.asarray(B, np.int64)   # kost (tuhé díly)
         self.N = None
+        self.UV = None     # vlastní UV (N, 2) – jinak promítnutí ze tří stran (box mapping)
         self.flat = False
 
     def copy(self):
@@ -169,6 +170,8 @@ def merge(*meshes):
     out = Mesh(np.concatenate(P), np.concatenate(I), np.concatenate(C), np.concatenate(B))
     if all(m.N is not None for m in ms):
         out.N = np.concatenate([m.N for m in ms])
+    if all(m.UV is not None for m in ms):
+        out.UV = np.concatenate([m.UV for m in ms]).astype(np.float32)
     return out
 
 
@@ -404,7 +407,8 @@ def write_glb(path, parts, skeleton=None, animations=None, name="Model"):
         m = _expand_flat(mesh) if mesh.flat else mesh
         N = m.normals()
         axisN = N
-        if mat.get("texture") and not mesh.flat:
+        own_uv = mesh.UV is not None and not mesh.flat
+        if mat.get("texture") and not mesh.flat and not own_uv:
             # každá stěna vlastní vrcholy (jedna osa promítnutí na stěnu), hladké normály zůstanou
             I = m.I.reshape(-1)
             fn = np.cross(m.P[m.I[:, 1]] - m.P[m.I[:, 0]], m.P[m.I[:, 2]] - m.P[m.I[:, 0]])
@@ -417,7 +421,9 @@ def write_glb(path, parts, skeleton=None, animations=None, name="Model"):
             "COLOR_0": out.acc(np.clip(_relative_tint(m.C) if mat.get("texture") else m.C, 0, 1).astype(np.float32),
                                5126, "VEC4", 34962),
         }
-        if mat.get("texture"):
+        if mat.get("texture") and own_uv:
+            attrs["TEXCOORD_0"] = out.acc(np.ascontiguousarray(m.UV, np.float32), 5126, "VEC2", 34962)
+        elif mat.get("texture"):
             uv = _box_uv(m.P, axisN, mat.get("uv_scale", 1.0))
             if mat.get("uv_swap"):   # otočení textury o 90° (např. řady tašek podél hřebene střechy)
                 uv = np.ascontiguousarray(uv[:, ::-1])
@@ -447,6 +453,9 @@ def write_glb(path, parts, skeleton=None, animations=None, name="Model"):
                 material["extensions"] = {"KHR_materials_emissive_strength": {"emissiveStrength": float(mat["emissive_strength"])}}
         if mat.get("double"):
             material["doubleSided"] = True
+        if mat.get("alpha_cutoff"):   # výřez průhlednosti (listí, tráva): alfa z textury barvy
+            material["alphaMode"] = "MASK"
+            material["alphaCutoff"] = float(mat["alpha_cutoff"])
         materials.append(material)
         primitives.append({"attributes": attrs, "indices": ind, "material": len(materials) - 1, "mode": 4})
 

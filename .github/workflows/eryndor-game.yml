@@ -17,7 +17,7 @@ on:
       engine_tag:
         description: 'Tag release enginu'
         required: false
-        default: 'v1.21.0'
+        default: 'v1.22.0'
       version:
         description: 'Verze hry (prázdné = 0.1.0-dev.<číslo běhu>)'
         required: false
@@ -43,7 +43,7 @@ concurrency:
 env:
   ENGINE_REPO: StudioVoxarioAI/Voxario-Studio-Engine
   PROJECT: game/voxario/Eryndor
-  ENGINE_TAG: ${{ inputs.engine_tag || 'v1.21.0' }}
+  ENGINE_TAG: ${{ inputs.engine_tag || 'v1.22.0' }}
 
 jobs:
   selftest:
