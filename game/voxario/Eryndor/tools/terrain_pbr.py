@@ -101,7 +101,7 @@ def variant(kind: str | None, albedo: np.ndarray, rough: np.ndarray, height: np.
         green = smoothstep(0.0, 0.08, albedo[..., 1] - albedo[..., 0])[..., None]
         lush = albedo * np.array([0.86, 1.08, 0.80], dtype=np.float32)
         albedo = albedo * (1.0 - green * 0.7) + lush * green * 0.7
-        albedo = albedo * np.array([0.95, 1.02, 0.92], dtype=np.float32)
+        albedo = albedo * np.array([0.8, 0.94, 0.66], dtype=np.float32)   # sytější zelená (ladí s trsy trávy)
     elif kind == "snow":
         # čerstvý sníh: jasný (albedo ~0,85), stopy nečistot utlumené, chladný nádech ve stínech
         mean = albedo.mean(axis=(0, 1), keepdims=True)

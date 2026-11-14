@@ -1,0 +1,2 @@
+Vegetace: fotoskeny Poly Haven (https://polyhaven.com), licence CC0 1.0 – grass_medium_01, island_tree_02,
+fir_tree_01, bark_brown_02, pine_bark. Vygenerováno skriptem tools/eryndor_foliage.py.
