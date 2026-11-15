@@ -77,6 +77,20 @@ function Selftest()
         local lakeRoad = roads[2].segments[#roads[2].segments]
         local q1, q2 = lakeRoad[#lakeRoad - 12], lakeRoad[#lakeRoad]
         view("k10-cesta-k-jezeru", q1[1], 2.2, q1[2], q2[1], 1.0, q2[2], 4)
+        -- dohled: vzdálené lesy (zjednodušené stromy za hranicí plných), Tisíciletý strom, pláž bez trávy na písku
+        local vr = map.Data.Regions.verdant
+        lookFrom(vr.x + 1500, G(vr.x + 1500, vr.z + 600) + 140, vr.z + 600, vr.x, G(vr.x, vr.z) + 20, vr.z)
+        timer.sleep(5); shot("k11-dohled-lesy")
+        view("k12-tisicilety-strom", gt.x + 55, 4, gt.z + 40, gt.x, 16, gt.z, 4)
+        local sx, sz
+        for _, sp in ipairs(map.Data.Spawns) do if sp[1] == "siren" then sx, sz = sp[2], sp[3]; break end end
+        local dl = math.sqrt(sx * sx + sz * sz)
+        local ux, uz = -sx / dl, -sz / dl
+        for k = 1, 400 do
+            local x, z = sx + ux * k, sz + uz * k
+            if G(x, z) > map.SeaY + 0.6 then sx, sz = x + ux * 12, z + uz * 12; break end
+        end
+        lookFrom(sx + uz * 6, G(sx, sz) + 3, sz - ux * 6, sx - ux * 30, map.SeaY, sz - uz * 30); timer.sleep(4); shot("k13-plaz")
         _G.world.environment({ time_of_day = 18.4 })
         view("k7-louka-vecer", s.x + 40, 1.7, s.z + 30, s.x + 140, 2.0, s.z + 70, 4)
         game.log("SELFTEST hotovo")

@@ -220,3 +220,9 @@ voda. Vše přes Voxario Studio Engine.
     odtud cesta k zamrzlému jezeru, lesní cesta přes Serpentine k elfí svatyni a Tisíciletému stromu,
     Popelavá stezka k Ignis Scar a Krystalová stezka k trhlině. Krajnice cest jsou ve splat mapách hlína.
   - Samotest `krajina` (k1–k10). Zbývá: mapa (M) zatím cesty nekreslí.
+- Dohled a optimalizace (Eryndor 0.14.0, engine v1.23.0): stínové kaskády kreslí jen stromy v dosahu stínů
+  (Ultra, Verdant: čas stínů −20 %, celkem −8 % i se vzdálenými lesy), stromy na hranici dohledu se plynule
+  rozplynou a za ní naváže vzdálená verze z málo karet (`tree_*_far`, `pine_*_far`, ~60 trojúhelníků) až do
+  2,2–2,4 km – lesy na kopcích nezmizí. Tisíciletý strom fotorealisticky (kůra platanu, koruna z karet listí),
+  tráva neroste na písku pláží (`avoid_layers`), opravený ukázkový doplněk SouradniceFPS (formát %d s desetinným
+  FPS) včetně tiché opravy staré kopie u hráčů. Samotest `krajina` k11–k13, záběry `docs/screenshots/dohled`.

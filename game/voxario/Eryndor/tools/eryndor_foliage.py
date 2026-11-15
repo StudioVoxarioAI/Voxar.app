@@ -312,7 +312,9 @@ def bend_out(center, up_bias=0.8):
     def f(p):
         d = np.asarray(p, np.float32) - c
         d /= max(np.linalg.norm(d), 1e-4)
-        return d + np.array([0.0, up_bias, 0.0], np.float32)
+        n = d + np.array([0.0, up_bias, 0.0], np.float32)
+        # bod přímo pod středem by dal nulovou normálu (NaN) – pak míří k obloze
+        return n if np.linalg.norm(n) > 0.05 else np.array([0.0, 1.0, 0.0], np.float32)
     return f
 
 
@@ -435,6 +437,137 @@ def conifer(seed, cells, bark_mat, out):
               name="Pine")
 
 
+def broadleaf_far(seed, cells, bark_mat, out):
+    """Vzdálená verze listnáče (stejný strom jako broadleaf(seed)): kmen ze 5 stěn a koruna z 18 velkých karet
+    na povrchu koruny (~45 trojúhelníků místo ~1500) – kreslí se za hranicí plného stromu."""
+    rng = np.random.default_rng(seed)
+    h = rng.uniform(4.2, 5.4)
+    trunk = lathe([(0.3, 0.0), (0.2, h * 0.5), (0.14, h + 0.8)], 5, False, False)
+    crown_c = np.array([0.0, h + 2.6, 0.0])
+    cards = []
+    bend = bend_out(crown_c, 0.6)
+    golden = math.pi * (3 - math.sqrt(5))
+    n = 18
+    for i in range(n):
+        y = 1 - (i + 0.5) / n * 1.6          # horní ~ 80 % koule (spodek koruny je řídký)
+        r = math.sqrt(max(0.0, 1 - y * y))
+        a = i * golden
+        d = np.array([math.cos(a) * r, y * 0.7, math.sin(a) * r])
+        p = crown_c + d * np.array([3.0, 2.4, 3.0])
+        out_dir = d / max(np.linalg.norm(d), 1e-3)
+        up = np.cross(out_dir, np.array([0.3, 1.0, 0.2]))
+        up /= max(np.linalg.norm(up), 1e-3)
+        size = 3.0
+        cards.append(card(p - out_dir * 1.2, out_dir, up, size, size, cells[i % len(cells)], bend, pivot="left"))
+    leaves = merge(*cards)
+    leaves.C[:, :3] = 0.8
+    write_glb(str(out), [(trunk, bark_mat), (leaves, foliage_material(FOL / "leaf_twigs.png", 0.7, 0.45))],
+              name="TreeFar")
+
+
+def conifer_far(seed, cells, bark_mat, out):
+    """Vzdálená verze smrku: kmen z 5 stěn a 6 pater po 4 velkých kartách jehličí (~50 trojúhelníků)."""
+    rng = np.random.default_rng(seed)
+    h = rng.uniform(11.0, 14.0)
+    trunk = lathe([(0.28, 0.0), (0.12, h * 0.75), (0.02, h)], 5, False, False)
+    cards = []
+    for wi in range(6):
+        t = wi / 5
+        y = h * (0.2 + 0.72 * t)
+        reach = (1.0 - t) * 3.1 + 0.6
+        for bi in range(4):
+            a = bi / 4 * 2 * math.pi + wi * 0.8
+            d = np.array([math.cos(a), -0.18 * (1 - t), math.sin(a)])
+            d /= np.linalg.norm(d)
+            up = np.cross(d, np.array([0.0, 1.0, 0.0]))
+            up = np.cross(up, d)
+            up /= np.linalg.norm(up)
+            cards.append(card(np.array([0.0, y, 0.0]), d, up, reach * 1.15, reach * 0.9, cells[(wi + bi) % len(cells)],
+                              bend_out(np.array([0, y + 0.8, 0]), 1.0), pivot="left"))
+    cards.append(card(np.array([0, h - 1.4, 0]), np.array([0, 1.0, 0]), np.array([1.0, 0, 0]), 1.5, 1.0, cells[0],
+                      bend_out(np.array([0, h - 2, 0]), 1.0), pivot="left"))
+    leaves = merge(*cards)
+    leaves.C[:, :3] = 0.75
+    write_glb(str(out), [(trunk, bark_mat), (leaves, foliage_material(FOL / "fir_twigs.png", 0.75, 0.42))],
+              name="PineFar")
+
+
+def giant(cells, bark_mat, out):
+    """Tisíciletý strom Sylvarie (~28 m, stejná velikost jako dřív): mohutný kmen s kořenovými náběhy, 7 hlavních
+    větví s rozvětvením, koruna z ~1000 karet větviček s listy; pod korunou svítící plody (lore Sylvarie)."""
+    from meshkit import sphere
+    rng = np.random.default_rng(7)
+    h = 16.0
+    prof = []
+    for k in range(13):
+        t = k / 12
+        r = 2.4 * (1 - t) + 1.0 * t
+        r *= 1 + 0.9 * max(0.0, 0.22 - t) / 0.22
+        prof.append((r, h * t))
+    trunk = lathe(prof, 18, True, True)
+
+    def roots(P):
+        t = np.clip(P[:, 1] / h, 0, 1)
+        ang = np.arctan2(P[:, 2], P[:, 0])
+        lobe = np.maximum(0, np.cos(ang * 6 + 1.3)) ** 3 * np.clip(1 - t / 0.18, 0, 1)
+        P[:, 0] *= 1 + lobe * 0.9
+        P[:, 2] *= 1 + lobe * 0.9
+        a = 1.4 * t   # zkroucený kmen
+        x = P[:, 0] * np.cos(a) - P[:, 2] * np.sin(a)
+        z = P[:, 0] * np.sin(a) + P[:, 2] * np.cos(a)
+        return np.stack([x, P[:, 1], z], 1)
+    trunk.apply(roots)
+    displace(trunk, 0.15, 0.8, 3)
+    wood = [trunk]
+    tips = []
+    for k in range(7):
+        a = k / 7 * 2 * math.pi + rng.uniform(-0.2, 0.2)
+        y = 11 + rng.uniform(0, 3.5)
+        d = np.array([math.cos(a), rng.uniform(0.45, 0.8), -math.sin(a)])
+        d /= np.linalg.norm(d)
+        L = rng.uniform(8.0, 10.0)
+        s = np.array([0.0, y, 0.0])
+        wood.append(branch(s, d, L, 0.75, 0.25, 8))
+        e = s + d * L
+        tips.append((s + d * L * 0.4, d, L * 0.6))
+        for j in range(3):
+            d2 = d + rng.normal(0, 0.45, 3) + np.array([0, 0.35, 0])
+            d2 /= np.linalg.norm(d2)
+            s2 = s + d * L * rng.uniform(0.55, 0.95)
+            L2 = rng.uniform(3.5, 5.5)
+            wood.append(branch(s2, d2, L2, 0.3, 0.08, 6))
+            tips.append((s2, d2, L2))
+    d = np.array([0.05, 1.0, 0.0])
+    wood.append(branch(np.array([0, h, 0]), d, 7.0, 0.9, 0.3, 8))
+    tips.append((np.array([0, h + 2, 0]), d, 6.0))
+    crown_c = np.array([0.0, 20.5, 0.0])
+    bend = bend_out(crown_c, 0.5)
+    cards = []
+    for s, d, L in tips:
+        for _ in range(36):
+            p = s + d * L * rng.uniform(0.2, 1.1) + rng.normal(0, 1.4, 3)
+            out_dir = p - crown_c
+            out_dir[1] *= 0.5
+            out_dir = out_dir / max(np.linalg.norm(out_dir), 1e-3) + rng.normal(0, 0.45, 3)
+            out_dir[1] -= 0.2
+            out_dir /= np.linalg.norm(out_dir)
+            up = np.cross(out_dir, rng.normal(0, 1, 3))
+            up /= np.linalg.norm(up)
+            size = rng.uniform(1.6, 2.4)
+            cards.append(card(p, out_dir, up, size, size, cells[int(rng.integers(len(cells)))], bend, pivot="left"))
+    leaves = merge(*cards)
+    dist = np.linalg.norm((leaves.P - crown_c) * np.array([1, 1.5, 1]), axis=1)
+    leaves.C[:, :3] = (0.5 + 0.5 * np.clip(dist / 9.0, 0.35, 1.0))[:, None]
+    fruits = []
+    for k in range(26):
+        a = rng.uniform(0, 2 * math.pi)
+        r = rng.uniform(4, 12)
+        fruits.append(sphere(0.32, 8, 6).translate(math.cos(a) * r, 14.5 + rng.uniform(0, 4), math.sin(a) * r))
+    glow = dict(name="glow", roughness=0.3, emissive=(0.37, 0.9, 1.0), emissive_strength=6.0)
+    write_glb(str(out), [(merge(*wood), bark_mat), (leaves, foliage_material(FOL / "leaf_twigs.png", 0.7, 0.45)),
+                         (merge(*fruits).color((0.62, 0.97, 1.0)), glow)], name="GiantTree")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--cache", default=os.environ.get("ERYNDOR_TEXTURE_CACHE",
@@ -449,12 +582,17 @@ def main():
     leaf_cells = leaf_twig_atlas(cache)
     for k in range(3):
         broadleaf(100 + k, leaf_cells, oak, NAT / f"tree_{k}.glb")
+        broadleaf_far(100 + k, leaf_cells, oak, NAT / f"tree_{k}_far.glb")
+    platanus = bark(cache, "bark_platanus", "bark_platanus")
+    platanus["uv_scale"] = 2.4
+    giant(leaf_cells, platanus, NAT / "giant_tree.glb")
     fir_cells = fir_atlas(cache)
     for k in range(3):
         conifer(200 + k, fir_cells, pine_bark, NAT / f"pine_{k}.glb")
+        conifer_far(200 + k, fir_cells, pine_bark, NAT / f"pine_{k}_far.glb")
     (FOL / "CREDITS.txt").write_text(
         "Vegetace: fotoskeny Poly Haven (https://polyhaven.com), licence CC0 1.0 – grass_medium_01, island_tree_02,\n"
-        "fir_tree_01, bark_brown_02, pine_bark. Vygenerováno skriptem tools/eryndor_foliage.py.\n", encoding="utf-8")
+        "fir_tree_01, bark_brown_02, pine_bark, bark_platanus. Vygenerováno skriptem tools/eryndor_foliage.py.\n", encoding="utf-8")
     print("hotovo")
 
 

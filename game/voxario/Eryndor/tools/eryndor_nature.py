@@ -489,10 +489,7 @@ def lamp_post(out):
 def main():
     os.makedirs(NAT, exist_ok=True)
     os.makedirs(BLD, exist_ok=True)
-    giant_tree()
-    for k in range(3):
-        broadleaf(100 + k, os.path.join(NAT, f"tree_{k}.glb"))
-        pine(200 + k, os.path.join(NAT, f"pine_{k}.glb"))
+    # stromy (tree_*, pine_*, giant_tree) generuje fotorealisticky tools/eryndor_foliage.py – zde se nepřepisují
     glow_mushroom(1, os.path.join(NAT, "mushrooms.glb"))
     glow_mushroom(2, os.path.join(NAT, "mushroom_big.glb"), big=True)
     tuft(3, os.path.join(NAT, "grass.glb"), rgb("#2e5a22"), rgb("#9fd25a"))
