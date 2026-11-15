@@ -54,10 +54,12 @@ class Mesh:
         self.N = None
         self.UV = None     # vlastní UV (N, 2) – jinak promítnutí ze tří stran (box mapping)
         self.flat = False
+        self.G = None      # skupiny vyhlazení normál (0 = svařit podle polohy, jinak vlastní = ostrá hrana)
 
     def copy(self):
         m = Mesh(self.P.copy(), self.I.copy(), self.C.copy(), self.B.copy())
         m.flat = self.flat
+        m.G = None if self.G is None else self.G.copy()
         return m
 
     # transformace ----------------------------------------------------------
@@ -131,7 +133,12 @@ class Mesh:
         P, I = self.P.astype(np.float64), self.I
         fn = np.cross(P[I[:, 1]] - P[I[:, 0]], P[I[:, 2]] - P[I[:, 0]])
         # vyhlazení přes vrcholy se stejnou polohou (švy)
-        _, weld = np.unique(np.round(P, 4), axis=0, return_inverse=True)
+        key = np.round(P, 4)
+        if self.G is not None and len(self.G) == len(P):
+            # díly s plošným stínováním (kvádry) se se sousedy nesvařují: jinak se normála rohu „přelévá“ přes
+            # celou stěnu a ta pak v pruzích odráží oblohu / tmavne
+            key = np.column_stack([key, self.G.astype(np.float64)])
+        _, weld = np.unique(key, axis=0, return_inverse=True)
         weld = weld.reshape(-1)
         acc = np.zeros((weld.max() + 1, 3))
         for k in range(3):
@@ -160,6 +167,25 @@ def merge(*meshes):
     ms = [m for m in meshes if m is not None and len(m.P)]
     if not ms:
         return Mesh()
+    G = None
+    if any(m.flat or m.G is not None for m in ms):
+        # plošně stínované díly (kvádry) si ostré hrany ponesou i po sloučení: vlastní vrcholy na trojúhelník
+        # a vlastní skupina vyhlazení (normály se počítají až po případném otočení výsledku)
+        out_ms, groups, next_id = [], [], 1
+        for m in ms:
+            if m.flat:
+                e = _expand_flat(m)
+                e.N = None
+                groups.append(np.repeat(np.arange(next_id, next_id + len(e.I)), 3))
+                next_id += len(e.I)
+                out_ms.append(e)
+            else:
+                groups.append(np.zeros(len(m.P), np.int64) if m.G is None else np.where(m.G > 0, m.G + next_id, 0))
+                if m.G is not None and len(m.G):
+                    next_id += int(m.G.max()) + 1
+                out_ms.append(m)
+        ms = out_ms
+        G = np.concatenate(groups).astype(np.int64)
     P, I, C, B, off = [], [], [], [], 0
     for m in ms:
         P.append(m.P)
@@ -168,6 +194,7 @@ def merge(*meshes):
         B.append(m.B)
         off += len(m.P)
     out = Mesh(np.concatenate(P), np.concatenate(I), np.concatenate(C), np.concatenate(B))
+    out.G = G
     if all(m.N is not None for m in ms):
         out.N = np.concatenate([m.N for m in ms])
     if all(m.UV is not None for m in ms):

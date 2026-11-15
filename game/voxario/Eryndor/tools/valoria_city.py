@@ -111,6 +111,18 @@ def banner(x, y, z, width, height, facing=1.0):
                    (x - width / 2, y, zz), (0, 0, facing))
 
 
+def window_unit(x, y, z, w, h, wood, glass, sill):
+    """Okno do +Z: sklo (svítí / tmavé), dřevěný rám, křížová příčle, kamenný parapet."""
+    glass.append(b(x, y, z + 0.01, w, h, 0.06))
+    for dx in (-1, 1):
+        wood.append(b(x + dx * (w / 2 + 0.04), y, z + 0.05, 0.1, h + 0.16, 0.1))
+    for dy in (-1, 1):
+        wood.append(b(x, y + dy * (h / 2 + 0.04), z + 0.05, w + 0.16, 0.1, 0.1))
+    wood.append(b(x, y, z + 0.06, 0.05, h, 0.05))
+    wood.append(b(x, y + h * 0.12, z + 0.06, w, 0.05, 0.05))
+    sill.append(b(x, y - h / 2 - 0.1, z + 0.12, w + 0.3, 0.1, 0.24))
+
+
 # ------------------------------------------------------------------ prvky
 def windows(width, depth, levels, y0, step, seed, glow_ratio=0.35, round_r=None):
     """Úzká gotická okna na čtyřech stranách; část svítí (teplé světlo zevnitř)."""
@@ -144,7 +156,7 @@ def spire_tower(w, h, spire, seed, round_tower=False, belfry=True):
     """Gotická věž: kvádrový / válcový dřík s opěráky a římsami, zvonice s okny, vysoká jehlancová střecha
     z olova se čtyřmi fiálami a zlatou makovicí."""
     stone, roof, gold, dark, lit = [], [], [], [], []
-    stone.append(b(0, 0.8, 0, w + 1.6, 1.6, w + 1.6))
+    stone.append(b(0, 0.8 - 4.0, 0, w + 1.6, 1.6 + 8.0, w + 1.6))   # sokl + základ 8 m pod terén
     if round_tower:
         r = w / 2
         stone.append(cylinder(r, r * 0.95, h, 20).translate(0, 0, 0))
@@ -205,7 +217,7 @@ def dome_hall(seed):
     """Kopulová rotunda (katedrála): kvádrová stavba s portikem, válcový tambur s okny, olověná kopule
     s lucernou a makovicí."""
     stone, roof, gold, dark, lit = [], [], [], [], []
-    stone.append(b(0, 6.5, 0, 22, 13, 22))
+    stone.append(b(0, 6.5 - 3.0, 0, 22, 13 + 6.0, 22))
     stone.append(b(0, 13.4, 0, 23, 0.8, 23))
     for x in np.linspace(-7.5, 7.5, 6):   # portikus
         stone.append(cylinder(0.7, 0.62, 10, 14).translate(x, 0, 12.5))
@@ -247,7 +259,7 @@ def house(seed, width=9.0, depth=8.0, floors=3, roof_mat=SLATE):
     """Hrázděný městský dům: kamenné přízemí, vysunutá patra s trámy, strmá střecha s vikýřem a komínem."""
     rng = np.random.default_rng(seed)
     stone, plaster, wood, roof, dark, lit = [], [], [], [], [], []
-    stone.append(b(0, 1.6, 0, width, 3.2, depth))
+    stone.append(b(0, 1.6 - 1.75, 0, width, 3.2 + 3.5, depth))   # přízemí + základ 3,5 m
     y = 3.2
     over = 0.0
     for f in range(floors - 1):
@@ -266,13 +278,43 @@ def house(seed, width=9.0, depth=8.0, floors=3, roof_mat=SLATE):
                 wood.append(box(0.18, math.hypot(dx, 2.6), 0.14).rotate(0, 0, math.degrees(math.atan2(dx, 2.6)) * (1 if (x > 0) else -1)).translate(x + dx / 2, y + 1.45, fz + 0.01))
         for x in np.linspace(-w / 2 + 0.15, w / 2 - 0.15, 5)[:-1]:   # okna mezi trámy
             dx = (w - 0.3) / 4
-            win = b(x + dx / 2, y + 1.55, fz + 0.03, dx * 0.5, 1.4, 0.08)
-            (lit if rng.random() < 0.35 else dark).append(win)
+            window_unit(x + dx / 2, y + 1.55, fz + 0.02, dx * 0.5, 1.4, wood, lit if rng.random() < 0.35 else dark, stone)
         wood.append(b(0, y - 0.15, fz - 0.1, w, 0.3, 0.5))   # zhlaví vysunutého patra
+        # hrázdění i na bocích a vzadu (čtvrti jsou natočené všemi směry, holá omítka působila jako krabice)
+        zc0 = over * 0.5
+        for sx in (-1, 1):
+            xs = sx * (w / 2 + 0.04)
+            zs = np.linspace(zc0 - d / 2 + 0.15, zc0 + d / 2 - 0.15, 4)
+            for z in zs:
+                wood.append(b(xs, y + 1.45, z, 0.16, 2.9, 0.22))
+            wood.append(b(xs, y + 0.1, zc0, 0.16, 0.25, d))
+            wood.append(b(xs, y + 2.8, zc0, 0.16, 0.22, d))
+            dz = zs[1] - zs[0]
+            for k, z in enumerate(zs[:-1]):
+                if k == 1:   # okno uprostřed boku
+                    (lit if rng.random() < 0.3 else dark).append(b(xs + sx * 0.03, y + 1.6, z + dz / 2, 0.08, 1.2, dz * 0.45))
+                    wood.append(b(xs + sx * 0.05, y + 0.95, z + dz / 2, 0.12, 0.12, dz * 0.6))
+                    continue
+                a = math.degrees(math.atan2(dz, 2.6)) * (1 if k == 0 else -1)
+                wood.append(box(0.14, math.hypot(dz, 2.6), 0.16).rotate(a, 0, 0).translate(xs, y + 1.45, z + dz / 2))
+        zb = zc0 - d / 2 - 0.04
+        xs_ = np.linspace(-w / 2 + 0.15, w / 2 - 0.15, 5)
+        for x in xs_:
+            wood.append(b(x, y + 1.45, zb, 0.22, 2.9, 0.16))
+        wood.append(b(0, y + 0.1, zb, w, 0.25, 0.16))
+        wood.append(b(0, y + 2.8, zb, w, 0.22, 0.16))
+        dx = xs_[1] - xs_[0]
+        for k, x in enumerate(xs_[:-1]):
+            if k in (1, 2):
+                (lit if rng.random() < 0.25 else dark).append(b(x + dx / 2, y + 1.6, zb - 0.03, dx * 0.45, 1.2, 0.08))
+                wood.append(b(x + dx / 2, y + 0.95, zb - 0.05, dx * 0.6, 0.12, 0.12))
+            else:
+                a = math.degrees(math.atan2(dx, 2.6)) * (1 if k == 0 else -1)
+                wood.append(box(0.18, math.hypot(dx, 2.6), 0.14).rotate(0, 0, a).translate(x + dx / 2, y + 1.45, zb))
         y += 2.9
     # přízemí: dveře a výloha
     wood.append(b(-width * 0.22, 1.25, depth / 2 + 0.05, 1.3, 2.5, 0.12))
-    dark.append(b(width * 0.18, 1.5, depth / 2 + 0.05, 2.2, 1.4, 0.08))   # výloha (sklo)
+    window_unit(width * 0.18, 1.6, depth / 2 + 0.02, 2.2, 1.4, wood, dark, stone)   # výloha
     stone.append(b(width * 0.18, 0.7, depth / 2 + 0.25, 2.6, 0.3, 0.5))
     # střecha: hřeben podél X (štít do ulice z boku), sklon ~52°
     w, d = width + over, depth + over
@@ -289,13 +331,15 @@ def house(seed, width=9.0, depth=8.0, floors=3, roof_mat=SLATE):
                    [[0, 1, 2]] if sx > 0 else [[0, 2, 1]])
         plaster.append(tri)
         wood.append(b(x + sx * 0.02, y + rise * 0.45, zc, 0.12, rise * 0.9, 0.2))
+        wood.append(b(x + sx * 0.02, y + 0.12, zc, 0.12, 0.22, d))                    # vazný trám štítu
+        wood.append(b(x + sx * 0.02, y + rise * 0.5, zc, 0.12, 0.2, d * 0.5))         # hambalek
         lit.append(b(x + sx * 0.04, y + rise * 0.35, zc, 0.08, 1.0, 0.7)) if rng.random() < 0.5 else None
     # vikýř do ulice
     roof.append(b(0, y + rise * 0.35, zc + d / 2 - 0.6, 2.0, 1.8, 1.6))
     roof.append(box(2.6, 0.25, 1.9).rotate(0, 0, 0).translate(0, y + rise * 0.35 + 1.05, zc + d / 2 - 0.6))
     (lit if rng.random() < 0.5 else dark).append(b(0, y + rise * 0.33, zc + d / 2 + 0.22, 1.0, 1.0, 0.08))
     stone.append(b(w * 0.3, y + rise * 0.8, zc - 0.8, 0.9, rise * 0.9 + 1.2, 0.9))   # komín
-    return [(merge(*stone), STONE), (merge(*plaster), dict(PLASTER, color=tuple(rng.uniform([0.92, 0.85, 0.7], [1.05, 1.0, 0.92])))),
+    return [(merge(*stone), dict(LIME, color=(0.9, 0.88, 0.84))), (merge(*plaster), dict(PLASTER, color=tuple(rng.uniform([0.92, 0.85, 0.7], [1.05, 1.0, 0.92])))),
             (merge(*wood), WOOD), (merge(*roof), roof_mat), (merge(*dark), GLASS), (merge(*lit), GLOW)]
 
 
@@ -322,7 +366,15 @@ def gate():
             stone.append(b(x, height + 0.9, z, 1.2, 1.8, 0.8))
     for sx in (-1, 1):   # tmavé obklady stěn průjezdu (průjezd zůstává volný)
         dark.append(b(sx * 4.42, 5.5, 0, 0.12, 11.0, thick - 0.6))
+    # základy: brána stojí na hraně útesu – věže i zeď pokračují 36 m dolů do skály
+    for sx in (-1, 1):
+        stone.append(b(sx * 10.5, -18.0, 0, 10.6, 36.0, 10.6))
+    stone.append(b(0, -18.0, 0, 12.0, 36.0, thick))
     parts += [(merge(*stone), LIME), (merge(*dark), dict(GLASS, color=(0.02, 0.02, 0.025)))]
+    # podlaha průjezdu (y = 0 = mostovka) a mírná rampa do města (−Z), obojí s kolizí
+    floor = [b(0, -0.25, 0, 8.8, 0.5, thick + 0.2),
+             box(8.8, 0.4, 8.1).rotate(5.0, 0, 0).translate(0, -0.55, -thick / 2 - 4.0)]
+    parts.append((merge(*floor), COBBLE))
     # deska s nápisem nad obloukem (obě strany) a zlatý rám
     sign, frame = [], []
     for sgn in (1, -1):
@@ -441,7 +493,7 @@ def dock(length=60.0, width=5.0):
 
 def city_wall(length=24.0, height=9.0, thick=3.2):
     """Úsek hradeb s cimbuřím (osa X, vnější líc +Z)."""
-    stone = [b(0, height / 2 - 1.5, 0, length, height + 3.0, thick)]
+    stone = [b(0, height / 2 - 6.0, 0, length, height + 12.0, thick)]   # hradby až 12 m pod terén (svah útesu)
     for x in np.arange(-length / 2 + 0.9, length / 2, 2.2):
         stone.append(b(x, height + 0.8, thick / 2 - 0.35, 1.2, 1.6, 0.7))
         stone.append(b(x, height + 0.8, -thick / 2 + 0.35, 1.2, 1.6, 0.7))
@@ -470,18 +522,35 @@ def stairs(length=150.0, rise=47.6, width=5.0):
 
 
 def floating_island(seed):
-    """Létající ostrov (fantasy svět): převrácený skalní kužel s travnatým vrcholem a malou zříceninou."""
+    """Létající ostrov (fantasy svět předlohy): převrácený rozeklaný skalní kužel s travnatým vrcholem,
+    visícími balvany, zříceninou a vodopádem padajícím z okraje."""
     rng = np.random.default_rng(seed)
-    r = rng.uniform(26, 40)
-    prof = [(0.4, -r * 1.6), (r * 0.35, -r * 1.1), (r * 0.75, -r * 0.45), (r, -0.6), (r * 0.98, 0.0)]
-    rock = lathe(prof, 18, True, False)
-    displace(rock, r * 0.12, 0.25, seed)
-    top = cylinder(r * 0.97, r * 0.97, 0.6, 18).translate(0, -0.3, 0)
-    displace(top, 0.3, 0.4, seed + 1)
-    ruin = [b(r * 0.2, 2.0, 0, 3, 4, 3), cylinder(1.3, 1.2, 7, 10).translate(-r * 0.3, 0, r * 0.2)]
+    r = rng.uniform(40, 58)
+    prof = [(0.4, -r * 1.7), (r * 0.3, -r * 1.25), (r * 0.62, -r * 0.7), (r * 0.9, -r * 0.25), (r, -0.6), (r * 0.98, 0.0)]
+    rock = [lathe(prof, 24, True, False)]
+    displace(rock[0], r * 0.14, 0.18, seed)
+    for k in range(5):   # visící skalní hroty pod ostrovem
+        a = rng.uniform(0, 2 * math.pi)
+        rr = rng.uniform(0.25, 0.6) * r
+        h = rng.uniform(0.5, 0.9) * r
+        sp = lathe([(0.3, -h), (r * 0.12, -h * 0.5), (r * 0.18, 0.0)], 10, True, False)
+        displace(sp, r * 0.03, 0.5, seed + 10 + k)
+        rock.append(sp.translate(math.cos(a) * rr, -r * 0.35, math.sin(a) * rr))
+    top = cylinder(r * 0.97, r * 0.97, 0.8, 24).translate(0, -0.4, 0)
+    displace(top, 0.5, 0.3, seed + 1)
+    ruin = [b(r * 0.2, 2.0, 0, 3, 4, 3), cylinder(1.3, 1.2, 7, 10).translate(-r * 0.3, 0, r * 0.2),
+            b(-r * 0.3, 7.2, r * 0.2, 2.8, 0.4, 2.8)]
+    # vodopád z okraje: tenký svislý pruh vody a pěna dole
+    wa = rng.uniform(0, 2 * math.pi)
+    wx, wz = math.cos(wa) * r * 0.97, math.sin(wa) * r * 0.97
+    water = [box(4.0, r * 1.1, 0.4).rotate(0, -math.degrees(wa) + 90, 0).translate(wx, -r * 0.55, wz),
+             box(1.2, 0.5, 6.0).rotate(0, -math.degrees(wa), 0).translate(wx * 0.94, 0.05, wz * 0.94)]
     grass = dict(name="grass top", texture=str(ASSETS / "Textures" / "terrain" / "pbr" / "trava_albedo.jpg"), uv_scale=4.0,
                  roughness=1.0)
-    return [(rock, STONE), (top, grass), (merge(*ruin), LIME)]
+    fall = dict(name="waterfall", color=(0.75, 0.88, 0.95), roughness=0.15, emissive=(0.45, 0.6, 0.7),
+                emissive_strength=0.6, double=True)
+    return [(merge(*rock), dict(LIME, color=(0.8, 0.74, 0.66), name="island rock")), (top, grass),
+            (merge(*ruin), LIME), (merge(*water), fall)]
 
 
 def generate():

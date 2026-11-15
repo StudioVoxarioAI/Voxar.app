@@ -30,14 +30,14 @@ MATERIALS = {
     "castle": ("medieval_blocks_03", 2.0, (1.0, 1.0, 1.0)),       # kvádrové zdivo hradu
     "stone": ("stone_brick_wall_001", 2.5, (1.0, 1.0, 1.0)),      # brána, most, sokly domů
     "cobble": ("cobblestone_floor_08", 2.0, (1.0, 1.0, 1.0)),     # dlažba ulic a podlaha hradu
-    "plaster": ("white_rough_plaster", 1.0, (1.0, 0.98, 0.94)),   # vápenná omítka hrázděných domů
+    "plaster": ("white_stucco", 2.0, (1.0, 0.94, 0.82)),          # čistá krémová omítka hrázděných domů
     "timber": ("old_planks_02", 2.0, (0.8, 0.74, 0.68)),          # tmavé dubové trámy, dveře
     "slate": ("roof_slates_03", 3.0, (0.82, 0.92, 1.08)),         # modrošedá břidlice (hrad, brána, modrý dům)
     "clay": ("roof_09", 4.0, (1.0, 1.0, 1.0)),                    # pálené tašky (červený dům)
     "linen": ("rough_linen", 0.27, (0.32, 0.48, 0.85)),           # modré plátno markýz a praporů
     "marble": ("marble_rock_03", 1.8, (1.0, 1.0, 1.0)),           # sochy hrdinů
     "planks": ("brown_planks_05", 2.0, (0.92, 0.86, 0.8)),        # mola přístavu a trupy lodí
-    "limestone": ("medieval_blocks_03", 2.0, (1.1, 1.0, 0.84)),   # teplý vápenec měšťanských věží a kopulí
+    "limestone": ("sandstone_blocks_08", 2.4, (1.0, 0.97, 0.92)),  # medový pískovec věží, brány a mostu (předloha)
     "lead": ("roof_slates_02", 2.5, (0.78, 0.86, 0.95)),          # olověné / břidlicové kopule a špičaté střechy
 }
 
