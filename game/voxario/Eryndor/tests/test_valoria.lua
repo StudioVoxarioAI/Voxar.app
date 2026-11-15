@@ -7,7 +7,7 @@ local function ground(x, z)
     -- plošina 50 m (mírně zvlněná), hradní skála 62 m, kolem moře
     local dx, dz = x - 3000, z - 2400
     if (dx / 150) ^ 2 + ((dz + 235) / 115) ^ 2 < 0.3 then return 62 + 0.1 * math.sin(x) end
-    if (dx / 300) ^ 2 + ((dz + 20) / 400) ^ 2 < 1 then return 50 + 0.3 * math.sin(x * 0.1) * math.cos(z * 0.13) end
+    if (dx / 300) ^ 2 + ((dz + 20) / 400) ^ 2 < 1 then return 50 end
     if x > 2605 and x < 2690 and z > 2430 and z < 2640 then return 2.4 end
     return -20
 end
@@ -78,13 +78,28 @@ assert(towers >= 10, "towers: " .. towers)
 assert(#find("Models/valoria/keep.glb") == 1 and #find("Models/valoria/keep_floor.glb") == 1)
 assert(#find(C .. "city_wall.glb") >= 20, "city walls along the cliff rim")
 
--- přístav: tři mola, lodě, schodiště na plošinu
+-- přístav: tři mola, lodě, nábřeží, schodiště vytesané do útesu s lucernami na podestách
 assert(#find(C .. "dock.glb") == 3)
 local ships = #find(C .. "ship_0.glb") + #find(C .. "ship_1.glb") + #find(C .. "ship_2.glb")
 assert(ships >= 5, "ships in the harbor: " .. ships)
-assert(#find(C .. "harbor_stairs.glb") == 1)
-local s = valoria.Stairs
-assert(ground(s.x0, s.z0) < 5 and ground(s.x1, s.z1) > 45, "stairs lead from the harbor up to the city")
+assert(#find(C .. "harbor_quay.glb") == 1 and find(C .. "harbor_quay.glb")[1].c[5].collider == "mesh")
+local st = find(C .. "harbor_stairs.glb")
+assert(#st == 1 and st[1].c[5].collider == "mesh" and st[1].c[3] == 0, "stairs model uses absolute heights")
+local sd = valoria.StairsData
+assert(math.abs(sd.bottom.y - 2.4) < 1e-6 and math.abs(sd.top.y - 50) < 1e-6 and #sd.landings >= 4)
+for i = 2, #sd.landings do assert(sd.landings[i][3] > sd.landings[i - 1][3], "landings climb") end
+
+-- hradby u brány: krátké úseky až k věžím (žádná mezera), žádný úsek v průjezdu
+local short = find(C .. "city_wall_6.glb")
+assert(#short >= 4, "short wall pieces next to the gate: " .. #short)
+local nearN, nearS = false, false
+for _, w in ipairs(short) do
+    local x, z = w.c[2], w.c[4]
+    assert(not (math.abs(x - gx) < 9 and math.abs(z - gz) < 15.5), "wall inside the gate passage")
+    if math.abs(x - gx) < 12 and z < gz - 15 and z > gz - 24 then nearN = true end
+    if math.abs(x - gx) < 12 and z > gz + 15 and z < gz + 24 then nearS = true end
+end
+assert(nearN and nearS, "walls reach both gate towers")
 
 -- létající ostrovy na obloze, portály
 local isles = #find(C .. "sky_island_0.glb") + #find(C .. "sky_island_1.glb") + #find(C .. "sky_island_2.glb")
@@ -99,10 +114,10 @@ assert(valoria.NearPortal(0, 0) == nil)
 
 -- tráva neroste na ulici, náměstí ani pod domy; dlažba ulice
 assert(#valoria.GrassExclude > 100)
--- ulice, náměstí a cesta k hradu jako pásy na terénu (world.road = kolize terénu, nic se nepropadá)
-assert(#roadCalls >= 8, "street, plaza strips and castle path")
-local main = roadCalls[1]
-assert(main.width == valoria.Street.width and main.texture:find("cobble", 1, true))
-assert(math.abs(main.points[1][1] - (gx + valoria.Gate.depth / 2 + 7.5)) < 1e-6, "street starts at the end of the gate ramp")
+-- ulice a náměstí: jeden dlážděný model s kolizí v úrovni podlahy brány; cesta k hradu jako world.road
+local pave = find(C .. "city_paving.glb")
+assert(#pave == 1 and pave[1].c[5].collider == "mesh" and pave[1].c[3] == valoria.GateY, "paving flush with the gate floor")
+assert(math.abs(valoria.StreetStart - (gx + valoria.Gate.depth / 2)) < 1e-6, "street starts at the gate")
+assert(#roadCalls >= 1)
 for _, r in ipairs(roadCalls) do assert(#r.points >= 2 and (r.lift or 0) <= 0.06) end
 print("Valorie Harbor: OK")

@@ -76,6 +76,16 @@ def main():
     s1[sr0:sr1, sc0:sc1] = a1 / np.maximum(total, 1e-6)
     Image.fromarray((s0 * 255 + 0.5).clip(0, 255).astype(np.uint8), "RGBA").save(s0p, optimize=True)
     Image.fromarray((s1 * 255 + 0.5).clip(0, 255).astype(np.uint8), "RGBA").save(s1p, optimize=True)
+    # maska jemného detailu terénu (engine ≥ 1.25: terrain detail_mask) – 4 m / px přes celý svět
+    mp = TERRAIN / "aethelgard_detail_mask.png"
+    m = 2048
+    px = SIZE / (m - 1)
+    mask = np.ones((m, m), np.float32)
+    mc0, mc1 = int((x0 + SIZE / 2) / px), int((x1 + SIZE / 2) / px) + 1
+    mr0, mr1 = int((z0 + SIZE / 2) / px), int((z1 + SIZE / 2) / px) + 1
+    MX, MZ = np.meshgrid(np.arange(mc0, mc1) * px - SIZE / 2, np.arange(mr0, mr1) * px - SIZE / 2)
+    mask[mr0:mr1, mc0:mc1] = vt.detail_strength(MX, MZ)
+    Image.fromarray((mask * 255 + 0.5).astype(np.uint8), "L").save(mp, optimize=True)
     print(f"Valoria: plošina {vt.PLATEAU_Y:.0f} m, hrad {vt.KEEP_Y:.0f} m, přístav {vt.HARBOR_Y:.1f} m, dno {seabed:.1f} m")
 
 

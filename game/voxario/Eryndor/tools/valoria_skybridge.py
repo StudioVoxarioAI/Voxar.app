@@ -31,7 +31,7 @@ DATA = ASSETS / "Scripts" / "eryndor" / "skybridge_data.lua"
 SIZE, BASE, RANGE = 8192.0, -80.0, 760.0
 SEA_Y = 0.0
 
-START = np.array([2711.0, 2400.0])     # západní líc brány VALORIE na okraji plošiny města (50 m)
+START = np.array([2713.5, 2400.0])     # západní líc brány VALORIE na okraji plošiny města (50 m)
 LANDING = np.array([2007.0, 2329.0])   # temeno útesu hlavního ostrova
 GATE = (2718.0, 2400.0, 9.0, 12.0)     # střed brány, hloubka a šířka průjezdu (valoria.lua)
 DECK_WIDTH = 14.0                      # mostovka (Most hrdinů má 20 m – rozšíření u napojení)
@@ -219,6 +219,9 @@ def build():
         arch[np.abs(u) >= half] = -1e9                      # pilíř: až do země
         bottom[m] = arch
     ground_c = np.minimum(gmin, ground) - 2.0               # založení pod terénem / mořským dnem
+    # předmostí u brány: první pole je plný kamenný opěrák až do skály (žádná tenká deska nad roklí)
+    abut = s <= pier_s[1] - pier_w / 2
+    bottom[abut] = -1e9
     fill = bottom < gmin + 0.3                              # klenba by zasahovala do terénu: plná zeď
     bottom = np.where(fill, ground_c, bottom)
     bottom = np.minimum(bottom, under - 0.4)
@@ -248,6 +251,12 @@ def build():
                                        dk + PARAPET_H, dk + PARAPET_H + 0.18, (first, last)))
         # klenby a plné zdi
         P["core"].append(ribbon(c, nr, -CORE_WIDTH / 2, CORE_WIDTH / 2, bt, un + 0.02, (first, last)))
+        # opěrák předmostí: v plné šířce mostovky až pod terén (lícuje s bránou a s útesem)
+        ia = np.nonzero(abut[sl])[0]
+        if len(ia) > 1:
+            j = slice(ia[0], ia[-1] + 1)
+            P["core"].append(ribbon(c[j], nr[j], -DECK_WIDTH / 2 - 0.25, DECK_WIDTH / 2 + 0.25,
+                                    rel(ground_c[sl][j]) - 2.0, dk[j] - DECK_THICK - 0.45, (True, True)))
 
     # pilíře: zesílené s břitem proti vlnám a hlavicí pod patkou klenby
     for ps in pier_s[1:-1]:

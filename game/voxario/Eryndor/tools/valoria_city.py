@@ -18,6 +18,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 from meshkit import Mesh, box, cone, cylinder, lathe, merge, sphere, write_glb, displace
 import valoria_assets as va
+import valoria_terrain as vt
 
 ASSETS = Path(__file__).resolve().parent.parent / "Assets"
 OUT = ASSETS / "Models" / "valoria" / "city"
@@ -364,16 +365,13 @@ def gate():
     for x in np.arange(-5.5, 6.0, 2.2):   # cimbuří
         for z in (-thick / 2 + 0.4, thick / 2 - 0.4):
             stone.append(b(x, height + 0.9, z, 1.2, 1.8, 0.8))
-    for sx in (-1, 1):   # tmavé obklady stěn průjezdu (průjezd zůstává volný)
-        dark.append(b(sx * 4.42, 5.5, 0, 0.12, 11.0, thick - 0.6))
     # základy: brána stojí na hraně útesu – věže i zeď pokračují 36 m dolů do skály
     for sx in (-1, 1):
         stone.append(b(sx * 10.5, -18.0, 0, 10.6, 36.0, 10.6))
     stone.append(b(0, -18.0, 0, 12.0, 36.0, thick))
-    parts += [(merge(*stone), LIME), (merge(*dark), dict(GLASS, color=(0.02, 0.02, 0.025)))]
-    # podlaha průjezdu (y = 0 = mostovka) a mírná rampa do města (−Z), obojí s kolizí
-    floor = [b(0, -0.25, 0, 8.8, 0.5, thick + 0.2),
-             box(8.8, 0.4, 8.1).rotate(5.0, 0, 0).translate(0, -0.55, -thick / 2 - 4.0)]
+    parts += [(merge(*stone), LIME)]
+    # podlaha průjezdu (y = 0 = mostovka = dlažba města; plošina je rovná, rampa není potřeba)
+    floor = [b(0, -0.3, 0, 8.8, 0.6, thick)]
     parts.append((merge(*floor), COBBLE))
     # deska s nápisem nad obloukem (obě strany) a zlatý rám
     sign, frame = [], []
@@ -504,21 +502,179 @@ def wall_tower(seed):
     return spire_tower(7.0, 16.0, 9.0, seed, round_tower=True)
 
 
-def stairs(length=150.0, rise=47.6, width=5.0):
-    """Schodiště z přístavu na plošinu: šikmá rampa se stupni a zábradlím na opěrné zdi (počátek dole,
-    stoupá k +Z)."""
-    stone, steps = [], []
-    n = int(length / 0.5)
-    for i in range(n):
-        z0 = i * length / n
-        y = rise * (i + 1) / n
-        steps.append(b(0, y - 0.12, z0 + length / n / 2, width, 0.24, length / n + 0.02))
-    # opěrná zeď pod rampou (po úsecích)
-    for k in range(0, int(length), 6):
-        y = rise * (k + 3) / length
-        stone.append(b(0, (y - 3.0) / 2, k + 3, width, y + 3.0, 6.05))
-        stone.append(b(width / 2 + 0.25, y + 0.5, k + 3, 0.5, 1.0, 6.05))
-    return [(merge(*stone), STONE), (merge(*steps), COBBLE)]
+_height = None
+
+
+def terrain(x, z):
+    """Výška z výškové mapy (bilineárně) – ve městě, přístavu a u schodů engine nepřidává detail (detail_mask)."""
+    global _height
+    if _height is None:
+        img = np.asarray(Image.open(ASSETS / "Terrain" / "aethelgard_height.png"), np.float32)
+        _height = img / 65535.0 * 760.0 - 80.0
+    size = 8192.0
+    n = _height.shape[0]
+    cell = size / (n - 1)
+    fx = (np.asarray(x, np.float64) + size / 2) / cell
+    fz = (np.asarray(z, np.float64) + size / 2) / cell
+    x0 = np.clip(np.floor(fx).astype(int), 0, n - 2)
+    z0 = np.clip(np.floor(fz).astype(int), 0, n - 2)
+    tx, tz = fx - x0, fz - z0
+    h = _height
+    return ((h[z0, x0] * (1 - tx) + h[z0, x0 + 1] * tx) * (1 - tz) + (h[z0 + 1, x0] * (1 - tx) + h[z0 + 1, x0 + 1] * tx) * tz)
+
+
+def stairs():
+    """Schodiště z přístavu na plošinu vytesané do útesu (valoria_terrain.stairs_layout): ramena po 17 cm
+    stupních, podesty, plný kamenný podklad, po obou stranách opěrné zdi s římsou (zábradlí), které sahají
+    pod terén zářezu i nad okolní skálu. Počátek = spodní konec osy na úrovni moře (y = 0 světa)."""
+    a, d, n, length = vt.stairs_axis()
+    yaw = math.degrees(math.atan2(d[0], d[1]))
+    W = vt.STAIRS_WIDTH
+
+    def at(u, lat=0.0):
+        return d * u + n * lat
+
+    def obox(u, lat, y0, y1, along, across, mesh_list):
+        c = at(u, lat)
+        mesh_list.append(box(across, max(y1 - y0, 0.05), along).rotate(0, yaw, 0).translate(c[0], (y0 + y1) / 2, c[1]))
+
+    steps, walls, caps = [], [], []
+    for u0, u1, y0, y1 in vt.stairs_layout():
+        if abs(y1 - y0) < 1e-6:
+            obox((u0 + u1) / 2, 0, y0 - 0.6, y0, u1 - u0 + 0.02, W, steps)
+            continue
+        k = max(1, int(round((y1 - y0) / 0.17)))
+        tread, rise = (u1 - u0) / k, (y1 - y0) / k
+        for i in range(k):
+            top = y0 + rise * (i + 1)
+            obox(u0 + tread * (i + 0.5), 0, top - rise - 0.45, top, tread + 0.01, W, steps)
+    # podklad pod schody až do terénu (spád útesu) a opěrné zdi po stranách
+    seg = 1.5
+    for u in np.arange(0.0, length, seg):
+        uc = min(u + seg / 2, length)
+        y = float(vt.stairs_y(uc))
+        p = a + at(uc)
+        ground = float(min(terrain(p[0] + n[0] * o, p[1] + n[1] * o) for o in (-W / 2, 0.0, W / 2)))
+        if ground < y - 0.9:
+            obox(uc, 0, ground - 1.5, y - 0.6, seg + 0.02, W, walls)
+        for side in (-1, 1):
+            q = a + at(uc, side * (W / 2 + 1.6))
+            outside = float(terrain(q[0], q[1]))
+            top = min(max(y + 1.05, outside + 0.3), y + 14.0)
+            bottom = min(outside, y) - 1.6
+            obox(uc, side * (W / 2 + 0.35), bottom, top, seg + 0.03, 0.7, walls)
+            if top <= y + 1.2:   # zábradlí: římsa
+                obox(uc, side * (W / 2 + 0.35), top, top + 0.14, seg + 0.03, 0.9, caps)
+    wall_mat = dict(LIME, color=(0.86, 0.82, 0.76), name="stairs masonry")
+    return [(merge(*steps), dict(LIME, name="stairs treads")), (merge(*walls), wall_mat), (merge(*caps), LIME)]
+
+
+def stairs_data():
+    """Podesty schodiště pro hru (lucerny) – Assets/Scripts/eryndor/valoria_stairs_data.lua."""
+    a, d, n, length = vt.stairs_axis()
+    lines = ["-- Vygenerováno skriptem tools/valoria_city.py – neupravovat ručně.",
+             "-- Schodiště z přístavu na plošinu: konce osy a podesty {x, z, y}", "return {",
+             f"    bottom = {{ x = {a[0]:.1f}, z = {a[1]:.1f}, y = {vt.HARBOR_Y:.2f} }},",
+             f"    top = {{ x = {a[0] + d[0] * length:.1f}, z = {a[1] + d[1] * length:.1f}, y = {vt.PLATEAU_Y:.2f} }},",
+             f"    width = {vt.STAIRS_WIDTH},", "    landings = {"]
+    for u0, u1, y0, y1 in vt.stairs_layout()[1:-1]:
+        if abs(y1 - y0) < 1e-6:
+            p = a + d * (u0 + u1) / 2
+            lines.append(f"        {{ {p[0]:.2f}, {p[1]:.2f}, {y0:.2f}, {n[0]:.4f}, {n[1]:.4f} }},")
+    lines += ["    },", "}", ""]
+    (ASSETS / "Scripts" / "eryndor" / "valoria_stairs_data.lua").write_text("\n".join(lines), encoding="utf-8")
+
+
+# dlažba města: hlavní ulice od brány na náměstí (pískovcové lemy) a kruhové náměstí s pískovcovým obrubníkem
+PAVE_ORIGIN = (2945.0, 2400.0)    # střed náměstí (valoria.lua Plaza)
+PLAZA_R = 30.0
+STREET_X0 = 2718.0 + 4.5          # východní líc brány (průjezd končí, ulice začíná)
+STREET_HALF, BAND = 6.0, 0.6
+
+
+def _orient(m, outward):
+    """Trojúhelníky otočí tak, aby normála mířila ve směru `outward` (vektor nebo funkce středu -> vektor)."""
+    P, I = m.P, m.I.copy()
+    for k, t in enumerate(I):
+        nrm = np.cross(P[t[1]] - P[t[0]], P[t[2]] - P[t[0]])
+        c = P[t].mean(0)
+        want = outward(c) if callable(outward) else np.asarray(outward)
+        if np.dot(nrm, want) < 0:
+            I[k] = t[::-1]
+    m.I = I
+    return m
+
+
+def _strip(rows, mat_list, thickness=0.6):
+    """Plochý pás dlažby z řad [(z, x0, x1)] (lokálně, nahoře y = 0) – kraje se boky spustí o `thickness`."""
+    P, I = [], []
+    for k, (z, x0, x1) in enumerate(rows):
+        P += [(x0, 0.0, z), (x1, 0.0, z)]
+        if k:
+            i = 2 * k
+            I += [[i - 2, i, i - 1], [i - 1, i, i + 1]]
+    top = _orient(Mesh(np.array(P, np.float32), np.array(I)), (0, 1, 0))
+    top.N = np.tile(np.array([[0, 1, 0]], np.float32), (len(P), 1))
+    mat_list.append(top)
+    # boky (spuštěné hrany) po obvodu
+    edge = [(r[1], r[0]) for r in rows] + [(r[2], r[0]) for r in rows[::-1]]
+    for (xa, za), (xb, zb) in zip(edge, edge[1:] + edge[:1]):
+        if abs(xa - xb) + abs(za - zb) < 1e-6:
+            continue
+        q = np.array([[xa, 0, za], [xb, 0, zb], [xb, -thickness, zb], [xa, -thickness, za]], np.float32)
+        m = Mesh(q, [[0, 1, 2], [0, 2, 3]])
+        m.flat = True
+        cx_, cz_ = np.mean([r[1] for r in rows] + [r[2] for r in rows]), np.mean([r[0] for r in rows])
+        mat_list.append(_orient(m, lambda c: np.array([c[0] - cx_, 0.0, c[2] - cz_])))
+
+
+def city_paving():
+    ox, oz = PAVE_ORIGIN
+    R = PLAZA_R
+    xs0 = STREET_X0 - ox
+    circ = lambda z: math.sqrt(max(R * R - z * z, 0.0))
+    cobble, band = [], []
+    zs = lambda z0, z1, st=0.5: list(np.linspace(z0, z1, max(2, int(round(abs(z1 - z0) / st)) + 1)))
+    # ulice (pásy lemů a dlažba), na východě končí na obvodu náměstí
+    _strip([(z, xs0, -circ(z)) for z in zs(-STREET_HALF, -STREET_HALF + BAND, 0.3)], band)
+    _strip([(z, xs0, -circ(z)) for z in zs(STREET_HALF - BAND, STREET_HALF, 0.3)], band)
+    _strip([(z, xs0, circ(z)) for z in zs(-STREET_HALF + BAND, STREET_HALF - BAND)], cobble)
+    # náměstí: kruh (v pásu ulice jen řady lemu od obvodu dál)
+    _strip([(z, -circ(z), circ(z)) for z in zs(-STREET_HALF, -STREET_HALF + BAND, 0.3)], cobble)
+    _strip([(z, -circ(z), circ(z)) for z in zs(STREET_HALF - BAND, STREET_HALF, 0.3)], cobble)
+    _strip([(z, -circ(z), circ(z)) for z in zs(-R, -STREET_HALF)], cobble)
+    _strip([(z, -circ(z), circ(z)) for z in zs(STREET_HALF, R)], cobble)
+    # obrubník náměstí (pískovcový prstenec 1,1 m) mimo vjezd ulice
+    ring = []
+    gap = math.asin((STREET_HALF + 0.2) / R)
+    angles = np.linspace(-math.pi + gap, math.pi - gap, 160)
+    for a0, a1 in zip(angles[:-1], angles[1:]):
+        pts = [(R * math.cos(a0), R * math.sin(a0)), (R * math.cos(a1), R * math.sin(a1)),
+               ((R + 1.1) * math.cos(a1), (R + 1.1) * math.sin(a1)), ((R + 1.1) * math.cos(a0), (R + 1.1) * math.sin(a0))]
+        q = np.array([[p[0], 0.012, p[1]] for p in pts] + [[p[0], -0.6, p[1]] for p in pts], np.float32)
+        top = _orient(Mesh(q[:4].copy(), [[0, 2, 1], [0, 3, 2]]), (0, 1, 0))
+        outer = _orient(Mesh(q[[2, 3, 7, 6]].copy(), [[0, 1, 2], [0, 2, 3]]), lambda c: np.array([c[0], 0.0, c[2]]))
+        inner = _orient(Mesh(q[[0, 1, 5, 4]].copy(), [[0, 1, 2], [0, 2, 3]]), lambda c: -np.array([c[0], 0.0, c[2]]))
+        for m in (top, outer, inner):
+            m.flat = True
+            ring.append(m)
+    # vnitřní kruh z pískovce kolem kašny / středu náměstí (předloha: světlé kamenné desky)
+    return [(merge(*cobble), COBBLE), (merge(*band, *ring), dict(LIME, name="sandstone kerb"))]
+
+
+HARBOR_QUAY = (2604.0, 2677.0, 2446.0, 2636.0)
+
+
+def harbor_quay():
+    """Dlážděné nábřeží přístavu (od schodiště k molům) s pískovcovou hranou nad vodou. Počátek = střed."""
+    x0, x1, z0, z1 = HARBOR_QUAY
+    cx, cz = (x0 + x1) / 2, (z0 + z1) / 2
+    cobble, edge = [], []
+    _strip([(z - cz, x0 + 1.6 - cx, x1 - cx) for z in np.linspace(z0, z1, 3)], cobble, thickness=1.2)
+    _strip([(z - cz, x0 - cx, x0 + 1.6 - cx) for z in np.linspace(z0, z1, 3)], edge, thickness=3.0)
+    for z in np.arange(z0 + 6, z1 - 3, 12):   # pacholata
+        edge.append(cylinder(0.25, 0.3, 0.7, 10).translate(x0 + 0.8 - cx, 0.0, z - cz))
+    return [(merge(*cobble), COBBLE), (merge(*edge), dict(LIME, name="quay edge"))]
 
 
 def floating_island(seed):
@@ -574,6 +730,10 @@ def generate():
         save(f"ship_{k}", ship(20 + k, sail, length=18.0 + 3 * k))
     save("dock", dock())
     save("city_wall", city_wall())
+    save("city_wall_6", city_wall(length=6.0))
+    save("city_paving", city_paving())
+    save("harbor_quay", harbor_quay())
+    stairs_data()
     save("wall_tower", wall_tower(30))
     save("harbor_stairs", stairs())
     for k in range(3):

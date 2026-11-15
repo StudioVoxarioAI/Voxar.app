@@ -117,7 +117,7 @@ function M.BuildTerrain()
     local half = map.Size / 2
     M.terrain = W.terrain({ size = { map.Size, map.Size }, cell = 2, origin = { -half, -half },
         heightmap = "Terrain/aethelgard_height.png", base_height = D.HeightBase, height_scale = D.HeightRange,
-        detail = 0.45, detail_scale = 0.16,
+        detail = 0.45, detail_scale = 0.16, detail_mask = "Terrain/aethelgard_detail_mask.png",   -- město rovné (engine ≥ 1.25)
         splatmap = "Terrain/aethelgard_splat0.png", splatmap2 = "Terrain/aethelgard_splat1.png", tiling = 5,
         -- tekoucí láva (engine ≥ 1.19): směr a rychlost proudu z kráterů korytem dolů, žár středu (tools/lava_flow.py)
         flowmap = "Terrain/aethelgard_lava_flow.png",
