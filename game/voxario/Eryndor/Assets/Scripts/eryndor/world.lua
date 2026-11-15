@@ -403,9 +403,8 @@ end
 function M.BuildGrass()
     local exclude = {}
     for _, a in ipairs(avoid) do exclude[#exclude + 1] = { a.x, a.z, a.r } end
-    -- Valoria: ulice, Most hrdinů a hrad
-    for z = 2300, 2680, 10 do exclude[#exclude + 1] = { 3000, z, 13 } end
-    exclude[#exclude + 1] = { 3000, 2165, 32 }
+    -- Valorie: ulice, náměstí, domy, věže a hrad (valoria.lua)
+    for _, e in ipairs(require("eryndor.valoria").GrassExclude) do exclude[#exclude + 1] = e end
     for _, r in ipairs(M.RoadExclude or {}) do exclude[#exclude + 1] = r end
     M.grass = W.grass({ models = { "Models/nature/grass_clump_0.glb", "Models/nature/grass_clump_1.glb",
                                    "Models/nature/grass_clump_2.glb" },

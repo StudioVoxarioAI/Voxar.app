@@ -26,7 +26,7 @@ local function defaults()
     local p = M.Presets[3]
     return { preset = "high", shadows = p.shadows, texture = p.texture, view = p.view, detail = p.detail, water = p.water,
              clouds = p.clouds, cull = p.cull, upscaler = "off", profile = "quality", scale = 1.0, fps = 0, vsync = true,
-             mode = "borderless", fov = 60 }
+             mode = "borderless", fov = 60, hud_minimap = 1.0, hud_tracker = true, hud_log = true }
 end
 
 function M.Load()
@@ -63,6 +63,13 @@ function M.Apply()
     elseif s.upscaler == "off" then
         call(g.render_scale, 1.0)
     end
+    -- rozhraní (HUD podle předlohy Valorie Harbor)
+    local okHud, hud = pcall(require, "eryndor.hud")
+    if okHud and hud then
+        hud.MinimapSize = s.hud_minimap or 1.0
+        hud.ShowTracker = s.hud_tracker ~= false
+        hud.ShowLog = s.hud_log ~= false
+    end
     call(g.fps_limit, s.fps)
     call(g.vsync, s.vsync)
     if not game.selftest() then call(g.window_mode, s.mode) end
@@ -91,7 +98,7 @@ function M.Draw()
     local w, h = 760, 720
     local x, y = sw / 2 - w / 2, sh / 2 - h / 2
     ui.fade(0.4, "#000000")
-    ui.panel("UI/hud/frame.png", x - 10, y - 10, w + 20, h + 20, 18, 22)
+    ui.panel("UI/hud/panel_ornate.png", x - 10, y - 10, w + 20, h + 20, 32, 40)
     local changed = false
     ui.window("Nastavení##eryndor", x + 14, y + 14, w - 28, h - 28, { title = false, move = false, resize = false, background = false,
         font = "panel", font_size = 26 }, function()
@@ -160,10 +167,21 @@ function M.Draw()
                 end
                 ui.end_tab()
             end
+            if ui.tab("Rozhraní") then
+                ui.label("Velikost minimapy (kompas vlevo nahoře)", DIM)
+                ui.item_width(-1)
+                local v, ch = ui.slider("##hud_minimap", s.hud_minimap or 1.0, 0.7, 1.4, "%.2f")
+                if ch then s.hud_minimap = v; changed = true end
+                local t1, c1 = ui.checkbox("Sledování úkolů vpravo (J)", s.hud_tracker ~= false)
+                if c1 then s.hud_tracker = t1; changed = true end
+                local t2, c2 = ui.checkbox("Záznam boje vlevo dole", s.hud_log ~= false)
+                if c2 then s.hud_log = t2; changed = true end
+                ui.end_tab()
+            end
             if ui.tab("Ovládání") then
                 ui.text_wrapped("WASD pohyb · Shift sprint · Ctrl chůze · Space skok · pravé tlačítko kamera · kolečko přiblížení\n" ..
                     "1–8 dovednosti a aktivní talenty · 9 / 0 lektvary · - automatický útok (R) · = další cíl (Tab)\n" ..
-                    "N strom talentů · M mapa světa · F mluvit · Esc menu / zrušit cíl", TEXT)
+                    "N strom talentů · M mapa světa · J sledování úkolů · F mluvit · Esc menu / zrušit cíl", TEXT)
                 ui.end_tab()
             end
             ui.end_tabs()

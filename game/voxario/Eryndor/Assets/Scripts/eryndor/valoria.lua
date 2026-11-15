@@ -1,15 +1,70 @@
--- Initial reconstruction; models are placeholders rather than final AAA assets.
+-- Valorie Harbor – startovní město podle předlohy: město na skalní plošině (50 m) nad mořem, gotické věže se
+-- špičatými olověnými střechami, kopulová katedrála, hrázděné domy, brána VALORIE s prapory, ulice s litinovými
+-- lucernami, obloukový most přes moře k bráně, pod útesem přístav s moly a plachetnicemi, na obloze létající ostrovy.
+-- Modely: tools/valoria_city.py (Models/valoria/city), most: tools/valoria_skybridge.py, ostrov: valoria_terrain.py.
 local map = require("eryndor.map")
 local M = {}
 local W = _G.world
 local cx, cz = 3000, 2400
+local C = "Models/valoria/city/"
+local sin, cos, sqrt, floor, atan, max, min, pi = math.sin, math.cos, math.sqrt, math.floor, math.atan, math.max,
+    math.min, math.pi
 
-M.Spawn = { x = cx, z = cz + 200 }
-M.CityPortal = { x = cx + 15, z = cz + 60 }
+-- tvar ostrova (stejně jako tools/valoria_terrain.py)
+M.PlateauY, M.KeepY, M.HarborY = 50, 62, 2.4
+M.Gate = { x = 2718, z = 2400, depth = 9, width = 12 }
+M.Harbor = { x0 = 2605, x1 = 2690, z0 = 2430, z1 = 2640 }
+M.Plaza = { x = 2945, z = 2400, r = 30 }
+M.Street = { x0 = 2723, x1 = 2915, z = 2400, width = 10 }
+
+-- start: na obloukovém mostě před branou, pohled na město (jako na předloze)
+M.Spawn = { x = 2672, z = 2400, yaw = 90 }   -- kamera i postava k bráně (na východ)
+M.CityPortal = { x = 2968, z = 2440 }
 M.OutpostPortal = { x = map.Start.x + 15, z = map.Start.z + 12 }
 
-local function model(name, x, z, options)
-    W.spawn("Models/valoria/" .. name .. ".glb", x, map.HeightAt(x, z), z, options)
+M.GrassExclude = {}   -- {x, z, r}: ulice, náměstí, stavby (tráva tu neroste)
+M.SkybridgeAvoid = {} -- místa na souši pod mostem (nic tu neroste)
+M.Placed = {}         -- seznam postavených staveb {kind, x, z} (testy, mapa)
+
+local function plateauRadius(dx, dz)
+    local a = atan(dz, dx)
+    local rim = 1 + 0.045 * sin(a * 7 + 0.6) + 0.025 * sin(a * 13)
+    return sqrt((dx / 300) ^ 2 + ((dz + 20) / 400) ^ 2) / rim
+end
+M.PlateauRadius = plateauRadius
+
+-- nejnižší / nejvyšší terén pod obdélníkem (stavba se posadí tak, aby nikde nevisela)
+local function groundRange(x, z, w, d, yaw)
+    local lo, hi = math.huge, -math.huge
+    local c, s = cos(math.rad(yaw or 0)), sin(math.rad(yaw or 0))
+    for i = -1, 1, 0.5 do
+        for j = -1, 1, 0.5 do
+            local lx, lz = i * w / 2, j * d / 2
+            local h = map.HeightAt(x + lx * c + lz * s, z - lx * s + lz * c)
+            lo, hi = min(lo, h), max(hi, h)
+        end
+    end
+    return lo, hi
+end
+
+local function place(kind, x, z, opts)
+    opts = opts or {}
+    local lo = groundRange(x, z, opts.w or 8, opts.d or 8, opts.yaw)
+    local y = (opts.y or lo) - (opts.sink or 0.25)
+    local id = W.spawn(C .. kind .. ".glb", x, y, z, { yaw = opts.yaw or 0, name = opts.name or "Valorie",
+        collider = opts.collider == false and nil or (opts.collider or "mesh"), scale = opts.scale })
+    M.Placed[#M.Placed + 1] = { kind = kind, x = x, z = z, id = id }
+    if opts.exclude then M.GrassExclude[#M.GrassExclude + 1] = { x, z, opts.exclude } end
+    return id, y
+end
+
+local function lamp(x, z, y, lit)
+    y = y or map.HeightAt(x, z)
+    W.spawn(C .. "lamp_post.glb", x, y - 0.05, z, { name = "Lucerna", collider = "box" })
+    if lit then
+        W.spawn("light", x, y + 5.0, z, { light = { color = { 1.0, 0.68, 0.36 }, intensity = 16, range = 18,
+            night_only = true } })
+    end
 end
 
 local function portal(p)
@@ -18,31 +73,23 @@ local function portal(p)
     W.spawn("light", p.x, y + 3, p.z, { light = { color = { 0.4, 0.7, 1.0 }, intensity = 25, range = 12 } })
 end
 
--- Most hrdinů: mostovka 20 x 200 m (horní plocha modelu v y = 0). Terén pod ním má jemný detail (± 0,45 m
--- šumu nad výškovou mapou) – mostovka se proto posadí nad nejvyšší místo terénu pod celou plochou, jinak
--- tráva prorůstala skrz dlažbu mostu.
-local BRIDGE = { z = 170, length = 200, width = 20 }
-local function bridgeHeight()
-    local highest = -math.huge
-    for dz = -BRIDGE.length / 2, BRIDGE.length / 2, 1 do
-        for dx = -BRIDGE.width / 2, BRIDGE.width / 2, 1 do
-            highest = math.max(highest, map.HeightAt(cx + dx, cz + BRIDGE.z + dz))
-        end
-    end
-    return highest + 0.06
-end
-M.BridgeY = nil
-
--- Obloukový most na hlavní ostrov (tools/valoria_skybridge.py): navazuje na jižní konec Mostu hrdinů, stáčí se
--- obloukem na západ a přes moře na kamenných klenbách vystoupá na útes nad údolím Serpentine.
+-- ------------------------------------------------------------------ obloukový most k bráně
 M.Skybridge = require("eryndor.skybridge_data")
 M.SkybridgeEntity = nil
-M.SkybridgeAvoid = {}   -- místa na souši pod mostem a u nájezdu (nic tu neroste)
+M.BridgeY = nil   -- výška mostovky u brány (= podlaha průjezdu)
 
--- výška horní plochy mostovky (svět) v bodě osy i (1..n)
 function M.SkybridgeY(i)
-    local p = M.Skybridge.points[i]
-    return M.BridgeY + p[3]
+    return M.BridgeY + M.Skybridge.points[i][3]
+end
+
+local function gateFloor()
+    local hi = -math.huge
+    for dx = -M.Gate.depth / 2, M.Gate.depth / 2, 1 do
+        for dz = -M.Gate.width / 2, M.Gate.width / 2, 1 do
+            hi = max(hi, map.HeightAt(M.Gate.x + dx, M.Gate.z + dz))
+        end
+    end
+    return hi + 0.06
 end
 
 local function skybridge()
@@ -50,72 +97,181 @@ local function skybridge()
     M.SkybridgeEntity = W.spawn("Models/valoria/skybridge.glb", d.start.x, M.BridgeY, d.start.z,
         { name = "Obloukový most Valorie", collider = "mesh" })
     local pts = d.points
-    for i, p in ipairs(pts) do
+    for _, p in ipairs(pts) do
         if p[4] == 0 then M.SkybridgeAvoid[#M.SkybridgeAvoid + 1] = { x = p[1], z = p[2], r = d.width } end
     end
-    -- lucerny po 60 m střídavě po stranách, světlo jen v noci
-    for i = 4, #pts - 3, 6 do
-        local a, b = pts[i - 1], pts[i + 1]
+    -- litinové lucerny po 30 m po obou stranách (světlo v noci každá druhá)
+    for i = 2, #pts - 3, 3 do
+        local a, b = pts[max(i - 1, 1)], pts[i + 1]
         local tx, tz = b[1] - a[1], b[2] - a[2]
-        local len = math.sqrt(tx * tx + tz * tz)
-        local side = math.floor(i / 6) % 2 == 0 and 1 or -1
-        local ox, oz = tz / len * 5.9 * side, -tx / len * 5.9 * side
-        local x, z, y = pts[i][1] + ox, pts[i][2] + oz, M.SkybridgeY(i)
-        W.spawn("Models/build/lamp.glb", x, y, z, { name = "Lucerna na mostě" })
-        W.spawn("light", x, y + 2.6, z,
-            { light = { color = { 1.0, 0.75, 0.4 }, intensity = 14, range = 16, night_only = true } })
+        local len = sqrt(tx * tx + tz * tz)
+        for side = -1, 1, 2 do
+            local ox, oz = tz / len * 6.2 * side, -tx / len * 6.2 * side
+            lamp(pts[i][1] + ox, pts[i][2] + oz, M.SkybridgeY(i), (floor(i / 3) + (side > 0 and 1 or 0)) % 2 == 0)
+        end
     end
 end
 
+-- ------------------------------------------------------------------ ulice a náměstí (dlažba)
 local function paving()
     local tiles = {}
-    local bridgeStart = cz + BRIDGE.z - BRIDGE.length / 2
-    local function addTile(px, pz)
-        local highest = -math.huge
+    local function tile(px, pz)
+        local hi = -math.huge
         for dx = -1, 1 do
-            for dz = -1, 1 do
-                highest = math.max(highest, map.HeightAt(px + dx, pz + dz))
-            end
+            for dz = -1, 1 do hi = max(hi, map.HeightAt(px + dx, pz + dz)) end
         end
-        local y = highest + 0.03
-        -- posledních 12 m ulice plynule stoupá k mostovce (žádný schod na začátku mostu)
-        local toBridge = bridgeStart - pz
-        if M.BridgeY and toBridge < 12 then
-            local t = 1 - math.max(toBridge, 0) / 12
-            y = math.max(y, y + (M.BridgeY - y) * t)
-        end
-        tiles[#tiles + 1] = { px, y, pz, 0, 1 }
+        tiles[#tiles + 1] = { px, hi + 0.03, pz, 0, 1 }
     end
-    for x = -8, 8, 2 do
-        for z = -89, 69, 2 do
-            addTile(cx + x, cz + z)
+    local s = M.Street
+    for x = s.x0, s.x1, 2 do
+        for z = -s.width / 2 + 1, s.width / 2 - 1, 2 do tile(x, s.z + z) end
+        if x % 8 == 1 then M.GrassExclude[#M.GrassExclude + 1] = { x, s.z, 8 } end
+    end
+    -- průjezd brány: dlažba ve výšce mostovky (z mostu do města bez schodu)
+    for x = M.Gate.x - M.Gate.depth / 2 + 0.5, M.Gate.x + M.Gate.depth / 2 + 1, 2 do
+        for z = -4, 4, 2 do tiles[#tiles + 1] = { x, M.GateY + 0.0, s.z + z, 0, 1 } end
+    end
+    local p = M.Plaza
+    for x = -p.r, p.r, 2 do
+        for z = -p.r, p.r, 2 do
+            if x * x + z * z <= p.r * p.r then tile(p.x + x, p.z + z) end
         end
     end
-    W.instances("Models/valoria/paving.glb", tiles, { distance = 600 })
+    M.GrassExclude[#M.GrassExclude + 1] = { p.x, p.z, p.r + 3 }
+    -- cesta k hradu (sever) a ke katedrále
+    for z = 2368, 2240, -2 do
+        for x = -3, 3, 2 do tile(2990 + x + (2368 - z) * 0.08, z) end
+        if z % 8 == 0 then M.GrassExclude[#M.GrassExclude + 1] = { 2990 + (2368 - z) * 0.08, z, 6 } end
+    end
+    W.instances("Models/valoria/paving.glb", tiles, { distance = 700 })
 end
 
+-- ------------------------------------------------------------------ hradby po okraji plošiny
+local function walls()
+    -- body okraje (plateau radius 0,93) po 24 m
+    local rim = {}
+    for k = 0, 359, 1 do
+        local a = math.rad(k)
+        local lo, hi = 0, 600
+        for _ = 1, 30 do
+            local r = (lo + hi) / 2
+            if plateauRadius(cos(a) * r, sin(a) * r) < 0.93 then lo = r else hi = r end
+        end
+        rim[#rim + 1] = { cx + cos(a) * lo, cz + sin(a) * lo }
+    end
+    local seg, acc, last = {}, 0, rim[1]
+    for i = 2, #rim + 1 do
+        local p = rim[(i - 1) % #rim + 1]
+        acc = acc + sqrt((p[1] - last[1]) ^ 2 + (p[2] - last[2]) ^ 2)
+        last = p
+        if acc >= 24 then seg[#seg + 1] = p; acc = 0 end
+    end
+    for i, p in ipairs(seg) do
+        local q = seg[i % #seg + 1]
+        local mx, mz = (p[1] + q[1]) / 2, (p[2] + q[2]) / 2
+        local nearGate = (mx - M.Gate.x) ^ 2 + (mz - M.Gate.z) ^ 2 < 22 ^ 2
+        local nearStairs = (mx - 2722) ^ 2 + (mz - 2490) ^ 2 < 16 ^ 2
+        local nearKeep = (mx - cx) ^ 2 / 160 ^ 2 + (mz - (cz - 235)) ^ 2 / 125 ^ 2 < 1
+        if not nearGate and not nearStairs and not nearKeep then
+            local yaw = math.deg(atan(q[1] - p[1], q[2] - p[2])) - 90
+            place("city_wall", mx, mz, { yaw = yaw, w = 24, d = 3, sink = 1.2, name = "Hradby Valorie" })
+            if i % 4 == 0 then place("wall_tower", p[1], p[2], { w = 7, d = 7, sink = 0.6, name = "Hradební věž" }) end
+        end
+    end
+end
+
+-- ------------------------------------------------------------------ stavba města
 function M.Build()
-    M.BridgeY = bridgeHeight()
-    W.spawn("Models/valoria/bridge.glb", cx, M.BridgeY, cz + BRIDGE.z, { name = "Most hrdinů", collider = "mesh" })
+    M.BridgeY = gateFloor()
+    M.GateY = M.BridgeY
     skybridge()
     paving()
-    model("gate", cx, cz + 90, { name = "Brána Valorie", collider = "mesh" })
-    for _, x in ipairs({ -13, 13 }) do
-        for z = 130, 250, 40 do
-            model("hero", cx + x, cz + z, { name = "Hrdina", collider = "box" })
+
+    -- brána VALORIE (průjezd podél osy X, průčelí na západ k mostu)
+    place("gate_valorie", M.Gate.x, M.Gate.z, { yaw = -90, w = 32, d = 9, y = M.GateY, sink = 0.06,
+        name = "Brána Valorie", exclude = 20 })
+
+    -- hlavní ulice: hrázděné domy po obou stranách, lucerny, sochy hrdinů
+    local s = M.Street
+    local k = 0
+    for x = s.x0 + 8, s.x1 - 6, 11 do
+        k = k + 1
+        place("house_" .. (k % 4), x, s.z - 10.5, { yaw = 0, w = 10, d = 9, name = "Měšťanský dům", exclude = 7 })
+        place("house_" .. ((k + 2) % 4), x + 3, s.z + 10.5, { yaw = 180, w = 10, d = 9, name = "Měšťanský dům",
+            exclude = 7 })
+        if k % 2 == 0 then
+            lamp(x - 5.5, s.z - 4.6, nil, true)
+            lamp(x - 2.5, s.z + 4.6, nil, k % 4 == 0)
         end
     end
-    for z = -60, 60, 24 do
-        model("house_blue", cx - 25, cz + z, { yaw = -90, name = "Dům", collider = "mesh" })
-        model("house_red", cx + 25, cz + z, { yaw = 90, name = "Dům", collider = "mesh" })
+
+    -- čtvrti: husté bloky domů po celé plošině (instance – 4 druhy domů, natočené podle uliček, kolize kmenem)
+    local blocked = { { 2820, 2296, 16 }, { 2786, 2350, 24 }, { 2840, 2462, 15 }, { 3062, 2425, 15 }, { 3105, 2318, 14 }, { 2880, 2300, 16 },
+                      { 3150, 2520, 16 }, { 2945, 2345, 26 }, { M.Plaza.x, M.Plaza.z, M.Plaza.r + 10 }, { cx, cz - 235, 70 },
+                      { M.Gate.x, M.Gate.z, 30 }, { 2722, 2490, 18 }, { M.CityPortal.x, M.CityPortal.z, 10 } }
+    local district = { {}, {}, {}, {} }
+    for gx = 2730, 3290, 13 do
+        for gz = 1990, 2790, 12 do
+            local jx, jz = ((gx * 13 + gz * 7) % 5) - 2, ((gx * 3 + gz * 11) % 3) - 1
+            local x, z = gx + jx, gz + jz
+            local pr = plateauRadius(x - cx, z - cz)
+            local free = pr < 0.86 and math.abs(z - s.z) > 21 and math.abs(x - 2990) > 8   -- hlavní ulice, cesta k hradu
+            if free and ((gx - 2730) / 13) % 4 == 3 then free = false end      -- uličky sever–jih
+            if free and ((gz - 1990) / 12) % 5 == 4 then free = false end      -- uličky západ–východ
+            for _, bl in ipairs(blocked) do
+                if free and (x - bl[1]) ^ 2 + (z - bl[2]) ^ 2 < bl[3] ^ 2 then free = false end
+            end
+            if free then
+                local kind = (floor(gx / 13) + floor(gz / 12)) % 4
+                local yaw = ((floor(gx / 13) % 2 == 0) and 0 or 180) + ((floor(gz / 12) % 3 == 0) and 90 or 0)
+                local lo = groundRange(x, z, 10, 9, yaw)
+                local list = district[kind + 1]
+                list[#list + 1] = { x, lo - 0.25, z, yaw, 1 }
+                M.GrassExclude[#M.GrassExclude + 1] = { x, z, 6.5 }
+            end
+        end
     end
-    model("keep", cx, cz - 235, { name = "Královský hrad", collider = "mesh" })
+    M.DistrictHouses = 0
+    for k = 1, 4 do
+        if #district[k] > 0 then
+            W.instances(C .. "house_" .. (k - 1) .. ".glb", district[k], { distance = 1600, collider = "capsule",
+                radius = 4.2, height = 10 })
+            M.DistrictHouses = M.DistrictHouses + #district[k]
+        end
+    end
+
+    -- náměstí s katedrálou (kopule) a sochami hrdinů
+    place("dome_hall", 2945, 2345, { yaw = 0, w = 24, d = 30, name = "Katedrála Valorie", exclude = 22 })
+    for i = 0, 5 do
+        local a = i / 6 * 2 * pi + 0.5
+        local x, z = M.Plaza.x + cos(a) * (M.Plaza.r - 4), M.Plaza.z + sin(a) * (M.Plaza.r - 4)
+        if z > M.Plaza.z - 18 then
+            W.spawn("Models/valoria/hero.glb", x, map.HeightAt(x, z) - 0.05, z,
+                { yaw = math.deg(atan(M.Plaza.x - x, M.Plaza.z - z)), name = "Hrdina", collider = "box" })
+        end
+        lamp(M.Plaza.x + cos(a + 0.5) * (M.Plaza.r + 1.5), M.Plaza.z + sin(a + 0.5) * (M.Plaza.r + 1.5), nil, i % 2 == 0)
+    end
+
+    -- panorama věží (jako na předloze): vysoké gotické věže se špičatými střechami po celém městě
+    place("tower_a", 2820, 2296, { w = 10, d = 10, name = "Věž mágů", exclude = 8 })
+    -- kopulová rotunda hned za branou (na předloze vlevo od brány nad viaduktem)
+    place("dome_hall", 2786, 2350, { yaw = 180, w = 22, d = 26, scale = 0.85, name = "Rotunda Valorie", exclude = 20 })
+    place("tower_b", 2840, 2462, { w = 9, d = 9, name = "Strážní věž", exclude = 7 })
+    place("tower_b", 3062, 2425, { w = 9, d = 9, name = "Zvonice", exclude = 7 })
+    place("tower_round", 3105, 2318, { w = 8, d = 8, name = "Kruhová věž", exclude = 7 })
+    place("tower_a", 2880, 2300, { w = 10, d = 10, name = "Věž rady", exclude = 8 })
+    place("tower_a", 3150, 2520, { w = 10, d = 10, name = "Věž", exclude = 8 })
+
+    -- Královský hrad na skále na severu: hradní palác + věže se špičatými střechami
+    place("tower_c", cx, cz - 262, { w = 12, d = 12, name = "Královská věž", exclude = 10 })
+    for _, o in ipairs({ { -26, -10 }, { 26, -10 }, { -24, 22 }, { 24, 22 } }) do
+        place("tower_a", cx + o[1], cz - 235 + o[2], { w = 10, d = 10, name = "Hradní věž", exclude = 8 })
+    end
+    W.spawn("Models/valoria/keep.glb", cx, map.HeightAt(cx, cz - 235), cz - 235, { name = "Královský hrad",
+        collider = "mesh" })
     local floorY = -math.huge
-    -- Sample all 2 m terrain vertices bordering the floor footprint, including the threshold.
     for x = -16, 16, 2 do
-        for z = -11, 13, 2 do
-            floorY = math.max(floorY, map.HeightAt(cx + x, cz - 235 + z))
-        end
+        for z = -11, 13, 2 do floorY = max(floorY, map.HeightAt(cx + x, cz - 235 + z)) end
     end
     M.KeepFloorY = floorY + 0.05
     M.KeepFloor = W.spawn("Models/valoria/keep_floor.glb", cx, M.KeepFloorY - 0.02, cz - 235,
@@ -125,10 +281,45 @@ function M.Build()
             { name = "Schod hradu", collider = "mesh" })
     end
     for _, x in ipairs({ -8, 8 }) do
-        local z = cz - 235
-        W.spawn("light", cx + x, map.HeightAt(cx + x, z) + 4, z,
-            { light = { color = { 1.0, 0.72, 0.42 }, intensity = 22, range = 13 } })
+        W.spawn("light", cx + x, M.KeepFloorY + 4, cz - 235, { light = { color = { 1.0, 0.72, 0.42 }, intensity = 22, range = 13 } })
     end
+    M.GrassExclude[#M.GrassExclude + 1] = { cx, cz - 235, 30 }
+
+    walls()
+
+    -- přístav pod útesem: mola, plachetnice, domy, lucerny, schodiště na plošinu
+    local h = M.Harbor
+    local sails = { 0, 1, 2, 1, 0 }
+    for i, z in ipairs({ 2468, 2532, 2596 }) do
+        W.spawn(C .. "dock.glb", h.x0 + 8, M.HarborY - 1.35, z, { yaw = -90, name = "Molo", collider = "mesh" })
+        W.spawn(C .. "ship_" .. sails[i] .. ".glb", h.x0 - 34, map.SeaY - 0.35, z + 7.5,
+            { yaw = -90 + (i - 2) * 6, name = "Plachetnice", collider = "mesh" })
+        lamp(h.x0 + 4, z - 2.8, M.HarborY + 0.05, true)
+    end
+    W.spawn(C .. "ship_2.glb", h.x0 - 120, map.SeaY - 0.35, 2560, { yaw = -60, name = "Plachetnice" })
+    W.spawn(C .. "ship_0.glb", h.x0 - 210, map.SeaY - 0.35, 2700, { yaw = -110, name = "Plachetnice" })
+    for z = h.z0 + 14, h.z1 - 45, 17 do
+        place("house_" .. floor(z / 17) % 4, h.x1 - 9, z, { yaw = -90, w = 10, d = 9, name = "Přístavní dům",
+            y = M.HarborY, sink = 0.3 })
+    end
+    -- schodiště z přístavu podél útesu na plošinu (dole u terasy, nahoře u okraje města)
+    local sx, sz, ex, ez = 2672, 2630, 2722, 2490
+    W.spawn(C .. "harbor_stairs.glb", sx, M.HarborY, sz, { yaw = math.deg(atan(ex - sx, ez - sz)),
+        name = "Přístavní schodiště", collider = "mesh" })
+    M.Stairs = { x0 = sx, z0 = sz, x1 = ex, z1 = ez }
+
+    -- létající ostrovy na obloze (fantasy svět předlohy)
+    local isles = { { 3650, 1900, 150, 0 }, { 2300, 1850, 175, 1 }, { 3700, 2900, 130, 2 }, { 3050, 1500, 210, 0 },
+                    { 2150, 2850, 160, 2 }, { 3400, 2250, 240, 1 } }
+    for i, s2 in ipairs(isles) do
+        W.spawn(C .. "sky_island_" .. s2[4] .. ".glb", s2[1], s2[3], s2[2], { yaw = s2[1] % 360, name = "Létající ostrov" })
+        for t2 = 0, 2 do   -- stromy na vrcholu
+            local a = t2 * 2.1 + i
+            W.spawn("Models/nature/tree_" .. (t2 % 3) .. ".glb", s2[1] + cos(a) * 12, s2[3] - 0.2, s2[2] + sin(a) * 12,
+                { yaw = t2 * 120, scale = 1.4, name = "Strom" })
+        end
+    end
+
     portal(M.CityPortal)
     portal(M.OutpostPortal)
 end

@@ -56,7 +56,7 @@ function Selftest()
         view("k2-louka-siroko", s.x + 20, 14, s.z - 40, s.x + 160, 2, s.z + 120, 4)
         view("k3-les-verdant", gt.x + 70, 2.0, gt.z + 50, gt.x + 20, 6, gt.z + 10, 4)
         view("k4-smrky", lake.x + 260, 3.0, lake.z + 200, lake.x + 120, 12, lake.z + 80, 4)
-        lookFrom(3070, valoria.BridgeY + 5, 2700, 2960, valoria.BridgeY + 4, 2560); timer.sleep(4); shot("k5-valoria-trava")
+        lookFrom(2900, valoria.GateY + 4, 2485, 2800, valoria.GateY + 3, 2390); timer.sleep(4); shot("k5-valoria-trava")
         local sky = valoria.Skybridge.points
         local e = sky[#sky]
         view("k6-cesta-od-mostu", e[1] - 30, 3.0, e[2] - 10, e[1] - 140, 1, e[2] - 60, 4)
@@ -143,6 +143,9 @@ function Selftest()
         return
     end
     if only == "valoria" then
+        -- počkat na načtení modelů a kolizí města (desítky staveb s kolizní sítí)
+        timer.wait_until(function() return _G.world.loading() == 0 end)
+        timer.sleep(3)
         local gateY = G(3000, 2165) + 2.0
         local passage = physics.spherecast(3000, gateY, 2183, 0.35, 0, 0, -1, 12)
         local wall = physics.spherecast(3006, gateY, 2183, 0.35, 0, 0, -1, 12)
@@ -151,18 +154,7 @@ function Selftest()
         assert(wall, "castle wall collision is missing")
         assert(floor and floor.entity == valoria.KeepFloor, "castle floor collision is missing")
         assert(valoria.KeepFloorY - 0.4 - G(3000, 2181) <= 0.45, "castle steps are too high for the player")
-        lookFrom(3670, 130, 3070, 3000, 16, 2400)
-        timer.sleep(3)
-        shot("v0-ostrov")
-        view("v1-udoli-hrdinu", 3000, 3, 2620, 3000, 16, 2480)
-        view("v2-obchodni-ctvrt", 3000, 5, 2455, 3000, 12, 2335)
-        view("v2b-fasady-domu", 3002, 4, 2428, 2975, 4, 2400)
-        view("v3-kralovsky-hrad", 3080, 35, 2300, 3000, 30, 2165)
-        view("v3b-pruceli-hradu", 3000, 8, 2210, 3000, 12, 2165)
-        view("v3c-interier-hradu", 3000, 2, 2176, 3008, 4, 2158)
-        assert(valoria.NearPortal(valoria.CityPortal.x, valoria.CityPortal.z) == valoria.OutpostPortal)
-        assert(valoria.NearPortal(valoria.OutpostPortal.x, valoria.OutpostPortal.z) == valoria.CityPortal)
-        -- obloukový most na hlavní ostrov: mostovka nad mořem má kolizi a vede až na útes
+        -- most vede až do brány: mostovka u brány, průjezd brány je volný
         local sky = valoria.Skybridge.points
         for _, i in ipairs({ 2, math.floor(#sky / 2), #sky - 4 }) do
             local p = sky[i]
@@ -171,19 +163,27 @@ function Selftest()
             assert(hit and hit.entity == valoria.SkybridgeEntity and hit.point and math.abs(hit.point.y - y) < 0.6,
                 "arched bridge deck collision is missing at point " .. i)
         end
-        local mid = sky[math.floor(#sky / 2)]
-        lookFrom(mid[1] + 260, 150, mid[2] + 330, mid[1], 40, mid[2])
-        timer.sleep(3)
-        shot("v5-obloukovy-most")
-        lookFrom(3040, valoria.BridgeY + 6, 2600, 2900, valoria.BridgeY + 12, 2760)
-        timer.sleep(2.5); shot("v6-most-z-valorie")
-        local q = sky[#sky - 14]
-        lookFrom(q[1] + 40, valoria.SkybridgeY(#sky - 14) + 8, q[2] + 30,
-            sky[#sky][1], valoria.SkybridgeY(#sky), sky[#sky][2])
-        timer.sleep(2.5); shot("v7-najezd-na-utes")
+        local g = valoria.Gate
+        assert(not physics.spherecast(g.x - 8, valoria.GateY + 1.5, g.z, 0.4, 1, 0, 0, 16), "gate passage is blocked")
+        assert(valoria.NearPortal(valoria.CityPortal.x, valoria.CityPortal.z) == valoria.OutpostPortal)
+        assert(valoria.NearPortal(valoria.OutpostPortal.x, valoria.OutpostPortal.z) == valoria.CityPortal)
+        _G.world.environment({ time_of_day = 19.2 })   -- zlatá hodina jako na předloze (letní slunce nízko nad obzorem)
+        timer.sleep(2)
+        local Y = valoria.GateY
+        -- v0: jako předloha – z mostu přes přístav na bránu, věže a katedrálu
+        lookFrom(2560, Y + 22, 2470, 2800, Y + 18, 2380); timer.sleep(4); shot("v0-valorie-predloha")
+        lookFrom(2668, Y + 2.2, 2401, 2760, Y + 6, 2400); timer.sleep(3); shot("v1-brana-z-mostu")
+        lookFrom(2735, Y + 2.0, 2400, 2900, Y + 7, 2400); timer.sleep(3); shot("v2-hlavni-ulice")
+        lookFrom(2950, Y + 4.0, 2428, 2945, Y + 14, 2345); timer.sleep(3); shot("v3-namesti-katedrala")
+        lookFrom(2560, 14, 2700, 2650, 6, 2530); timer.sleep(3); shot("v4-pristav")
+        lookFrom(2400, 160, 2950, 2950, 40, 2330); timer.sleep(4); shot("v5-ostrov-z-vysky")
+        lookFrom(3080, Y + 14, 2290, 3000, Y + 22, 2165); timer.sleep(3); shot("v6-kralovsky-hrad")
+        _G.world.environment({ time_of_day = 21.5 })
+        lookFrom(2560, Y + 22, 2470, 2800, Y + 18, 2380); timer.sleep(4); shot("v7-valorie-v-noci")
+        _G.world.environment({ time_of_day = 15 })
         game_.EnterWorld(1)
         timer.sleep(2)
-        shot("v4-start")
+        shot("v8-start")
         player.Teleport(valoria.OutpostPortal.x + 8, valoria.OutpostPortal.z)
         local x, _, z = player.Pos()
         assert(math.abs(x - (valoria.OutpostPortal.x + 8)) < 1 and math.abs(z - valoria.OutpostPortal.z) < 1)
@@ -264,6 +264,12 @@ function Selftest()
         cr.light.mode = 2; cr.light.time = 18.2; cr.ApplyLight()
         timer.sleep(2); shot("u3-tvorba-zlata-hodina")
         game_.EnterWorld()
+        -- HUD jako na předloze Valorie Harbor: na mostě před branou za zlaté hodiny, kompas, cíl, portrét, úkoly
+        _G.world.environment({ time_of_day = 19.2 })
+        player.Teleport(valoria.Spawn.x, valoria.Spawn.z); player.cam.yaw = 90; player.cam.pitch = 8
+        timer.wait_until(function() return _G.world.loading() == 0 end)
+        timer.sleep(3); shot("u0-hud-valorie-harbor")
+        player.cam.pitch = 18
         _G.world.environment({ time_of_day = 14 })
         local wx, wz = spawnOf("wolf")
         player.Teleport(wx - 7, wz - 7); player.cam.yaw = 45
@@ -810,6 +816,7 @@ game_.Reset = function()
     combat.mobs, combat.target, combat.auto, combat.floats = {}, nil, false, {}
     if player.view then entity.destroy(player.view); entity.destroy(player.body); entity.destroy(player.lamp) end
     if quest.npc then entity.destroy(quest.npc); entity.destroy(quest.light) end
+    if quest.aerin then entity.destroy(quest.aerin); entity.destroy(quest.aerinLight); quest.aerin = nil end
     player.dead = false
 end
 
@@ -906,7 +913,7 @@ local function microBar()
     }
     local w = #items * s + (#items - 1) * gap
     local x0, y0 = sw - w - 34, sh - 82
-    ui.panel("UI/hud/frame_thin.png", x0 - 16, y0 - 14, w + 32, s + 28, 10, 14)
+    ui.panel("UI/hud/panel_ornate_light.png", x0 - 16, y0 - 14, w + 32, s + 28, 24, 40)
     widgets.Block(x0 - 16, y0 - 14, w + 32, s + 28)
     for i, it in ipairs(items) do
         if widgets.IconButton(x0 + (i - 1) * (s + gap), y0, s, it[1], it[2], it[3], it[4]) then it[5]() end
@@ -951,7 +958,8 @@ function on_start()
     hud.Init()
     options.Load()
     options.Apply()   -- uložené grafické nastavení (předvolba, stíny, textury, DLSS / FSR, FPS…)
-    _G.world.environment({ day_night = true, real_time = false, time_of_day = 15, day_length = 60, fog = 0.0006,
+    -- start ve Valorii za zlaté hodiny (jako na předloze Valorie Harbor), den pak plyne dál (60 min)
+    _G.world.environment({ day_night = true, real_time = false, time_of_day = 19.4, day_length = 60, fog = 0.0006,
                            shadow_distance = 260, haze = 0.45, exposure = 0.85, night_exposure = 1.6,
                            contrast = 1.1, saturation = 1.22, clouds = 0.45, bloom = 0.12,
                            style = "realistic" })   -- realistické vykreslování enginu (fyzikální PBR + SSAO)
@@ -1053,8 +1061,11 @@ function on_gui()
     end
     -- jmenovka Lyrise
     local l = map.Lyrise
-    ui.world_label(l.x, G(l.x, l.z) + 2.6, l.z, quest.step == 1 and "! Archivářka Lyrise" or "Archivářka Lyrise",
+    ui.world_label(l.x, G(l.x, l.z) + 2.6, l.z, quest.step <= 2 and "! Archivářka Lyrise" or "Archivářka Lyrise",
         { color = "#9fc8ff", size = 20, max_distance = 40 })
+    local ae = quest.Aerin
+    ui.world_label(ae.x, 4.9, ae.z, quest.step == 1 and "! Kapitán Aerin" or "Kapitán Aerin",
+        { color = "#ffd890", size = 20, max_distance = 40 })
     if quest.NearNpc() and not quest.dialog then
         local sw, sh = ui.screen()
         ui.font("body"); ui.text(sw / 2, sh - 190, "[F] Mluvit", { align = "center", color = "#ffe8b0", shadow = true }); ui.pop_font()

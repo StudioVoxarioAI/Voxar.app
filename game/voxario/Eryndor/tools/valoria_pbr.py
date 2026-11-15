@@ -36,6 +36,9 @@ MATERIALS = {
     "clay": ("roof_09", 4.0, (1.0, 1.0, 1.0)),                    # pálené tašky (červený dům)
     "linen": ("rough_linen", 0.27, (0.32, 0.48, 0.85)),           # modré plátno markýz a praporů
     "marble": ("marble_rock_03", 1.8, (1.0, 1.0, 1.0)),           # sochy hrdinů
+    "planks": ("brown_planks_05", 2.0, (0.92, 0.86, 0.8)),        # mola přístavu a trupy lodí
+    "limestone": ("medieval_blocks_03", 2.0, (1.1, 1.0, 0.84)),   # teplý vápenec měšťanských věží a kopulí
+    "lead": ("roof_slates_02", 2.5, (0.78, 0.86, 0.95)),          # olověné / břidlicové kopule a špičaté střechy
 }
 
 

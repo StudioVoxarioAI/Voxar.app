@@ -9,30 +9,30 @@ import valoria_terrain
 
 
 class ValoriaTerrainTest(unittest.TestCase):
-    def test_island_plateau_keep_and_unchanged_ocean(self):
-        x = np.array([3000.0, 3000.0, 3500.0, 0.0])
-        z = np.array([2620.0, 2165.0, 2400.0, 0.0])
-        original = np.full(4, -40.0)
+    def test_city_plateau_keep_harbor_and_unchanged_ocean(self):
+        x = np.array([2950.0, 3000.0, 2650.0, 0.0, 3000.0])
+        z = np.array([2400.0, 2165.0, 2530.0, 0.0, 2400.0])
+        original = np.full(5, -40.0)
         height, mask = valoria_terrain.apply(original, x, z)
-        self.assertAlmostEqual(height[0], 12.0)
-        self.assertGreater(height[1], 29.0)
+        self.assertAlmostEqual(height[0], valoria_terrain.PLATEAU_Y, delta=1.0)    # plošina města
+        self.assertAlmostEqual(height[1], valoria_terrain.KEEP_Y, delta=1.0)       # hradní skála
+        self.assertAlmostEqual(height[2], valoria_terrain.HARBOR_Y, delta=0.3)     # přístavní terasa
         self.assertEqual(height[3], original[3])
         self.assertEqual(mask[3], 0.0)
-        self.assertLess(height[2], 12.0)
 
-    def test_island_footprint_and_city_are_preserved(self):
+    def test_island_footprint_and_cliffs(self):
         x, z = np.meshgrid(np.arange(2200.0, 3801.0, 10.0), np.arange(1550.0, 3251.0, 10.0))
         original = np.full_like(x, -40.0)
         height, mask = valoria_terrain.apply(original, x, z)
         radius = np.hypot((x - 3000) / 600, (z - 2400) / 700)
         self.assertTrue(np.all(mask[radius >= 1.0] == 0))
         self.assertTrue(np.array_equal(height[radius >= 1.0], original[radius >= 1.0]))
-        city = (abs(x - 3000) <= 75) & (abs(z - 2400) <= 300)
-        keep_radius = np.hypot((x - 3000) / 190, (z - 2165) / 150)
-        expected = 12 + 20 * (1 - valoria_terrain._smoothstep(0.15, 1.0, keep_radius))
-        np.testing.assert_allclose(height[city], expected[city])
-        outer = (radius > 0.45) & (radius < 0.62)
-        self.assertGreater(np.ptp(height[outer]), 3.0)
+        pr = valoria_terrain.plateau_radius(x - 3000, z - 2400)
+        flat = pr < 0.9
+        self.assertLess(np.ptp(height[flat & (np.hypot((x - 3000) / 150, (z - 2165) / 115) > 1.1)]), 2.0)
+        # útes pod branou: na 30 m víc než 30 m převýšení
+        self.assertGreater(height[(abs(x - 2720) < 1) & (abs(z - 2400) < 1)][0] -
+                           height[(abs(x - 2690) < 1) & (abs(z - 2500) < 1)][0], 30.0)
 
     def test_surface_weights(self):
         h = np.array([2.0, 12.0, 20.0, -1.0])

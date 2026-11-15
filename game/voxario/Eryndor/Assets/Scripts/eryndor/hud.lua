@@ -47,32 +47,38 @@ function M.DrawGame()
     local sw, sh = ui.screen()
     local ab = require("eryndor.actionbar")
     local name = (player.appearance and player.appearance.name ~= "" and player.appearance.name) or s.class.name
-    ab.UnitFrame(20, 18, "me", name, s.level, s.hp, s.maxhp, s.mp, s.maxmp, { icon = s.class.id .. "_1" })
-    -- zkušenosti pod rámečkem
-    ui.bar(30, 126, 340, 8, s.xp / combat.XpNeed(s.level), "#8a5ad8")
+    -- portréty vpravo nahoře (předloha: družina pod sebou) – hráč, pod ním cíl
+    local px0 = sw - 108
+    local _, ph = ab.Portrait(px0, 18, "me", name, s.level, s.hp, s.maxhp, s.mp, s.maxmp,
+        { icon = s.class.id .. "_1", label = true })
+    M.portraitBottom = 18 + ph
     local talents = require("eryndor.talents")
     local free = talents.Points(s) - talents.Spent(s)
     if free > 0 then
-        ui.font("small"); ui.text(30, 136, free .. " volné body talentů – N", { color = GOLD, shadow = true }); ui.pop_font()
+        ui.font("small"); ui.text(sw - 20, M.portraitBottom + 4, free .. " volné body talentů – N", { align = "right", color = GOLD, shadow = true }); ui.pop_font()
+        M.portraitBottom = M.portraitBottom + 24
     end
-    -- buffy
-    local bx = 30
+    -- buffy (vlevo od portrétu)
+    local bx = px0 - 48
     for _, b in pairs(s.buffs) do
         local left = b.until_t - game.time()
         if left > 0 then
-            ui.rect(bx, 160, 34, 34, "#0d0f16d0", 4)
-            ui.rect(bx + 3, 163, 28, 28, b.color or "#888", 3)
-            ui.font("small"); ui.text(bx + 17, 196, tostring(floor(left)), { align = "center", color = TEXT }); ui.pop_font()
-            bx = bx + 40
+            ui.rect(bx, 84, 34, 34, "#0d0f16d0", 4)
+            ui.rect(bx + 3, 87, 28, 28, b.color or "#888", 3)
+            ui.rect(bx, 84, 34, 34, GOLD, 4, false, 1.5)
+            ui.font("small"); ui.text(bx + 17, 120, tostring(floor(left)), { align = "center", color = TEXT }); ui.pop_font()
+            bx = bx - 40
         end
     end
-    -- cíl
+    -- cíl (druhý portrét)
     local t = combat.target
     if t and t.state ~= "dead" then
-        ab.UnitFrame(400, 18, "target", t.t.name, t.level, t.hp, t.maxhp, nil, nil, { hostile = true, elite = t.t.elite })
+        local _, th = ab.Portrait(px0, M.portraitBottom + 14, "target", t.t.name, t.level, t.hp, t.maxhp, nil, nil,
+            { hostile = true, elite = t.t.elite, icon = "target", label = true })
         if t.stunT and game.time() < t.stunT then
-            ui.font("small"); ui.text(500, 108, "Omráčen", { color = "#ffe080" }); ui.pop_font()
+            ui.font("small"); ui.text(px0 - 10, M.portraitBottom + 50, "Omráčen", { align = "right", color = "#ffe080" }); ui.pop_font()
         end
+        M.portraitBottom = M.portraitBottom + 14 + th
         -- značka nad cílem
         local p = entity.get_position(t.id)
         local x, y, vis = ui.world_to_screen(t.x, combat.MobY(t) + (t.t.labelY and t.t.labelY + 0.4 or (t.t.elite and 3.4 or 2.4)), t.z)
@@ -126,14 +132,16 @@ function M.DrawGame()
         ui.pop_font()
     end
     ab.EndFrame()
-    -- záznam boje
-    frame(20, sh - 250, 420, 190)
-    ui.font("small")
-    for i, l in ipairs(combat.log) do
-        local a = max(0.35, 1 - (now - l.t) / 25)
-        ui.text(32, sh - 242 + (i - 1) * 22, l.text, { color = { l.color[1], l.color[2], l.color[3], a } })
+    -- záznam boje (vlevo dole, průsvitný zdobený panel)
+    if M.ShowLog ~= false then
+        ui.panel("UI/hud/panel_ornate_light.png", 16, sh - 236, 430, 200, 28, 40)
+        ui.font("small")
+        for i, l in ipairs(combat.log) do
+            local a = max(0.35, 1 - (now - l.t) / 25)
+            ui.text(34, sh - 222 + (i - 1) * 22, l.text, { color = { l.color[1], l.color[2], l.color[3], a } })
+        end
+        ui.pop_font()
     end
-    ui.pop_font()
     -- smrt
     if player.dead then
         ui.fade(0.45, "#000000")
@@ -143,13 +151,47 @@ function M.DrawGame()
 end
 
 -- ------------------------------------------------------------------ výprava (sledování vpravo)
+-- počet řádků textu zalomeného na šířku w (písmo „small“ ~ 8,6 px na znak)
+local function wrapLines(text, w)
+    local n = utf8 and utf8.len(text) or #text
+    return math.max(1, math.ceil((n or #text) * 8.6 / math.max(w, 40)))
+end
+
+-- sledování úkolů (vpravo pod portréty, zdobený panel jako na předloze; X skryje, J znovu ukáže)
+M.ShowTracker = true
 function M.DrawQuest(q)
     if not q then return end
-    local sw = ui.screen()
-    frame(sw - 400, 200, 380, 40 + #q.lines * 26)
-    ui.font("h2"); ui.text(sw - 386, 208, q.title, { color = GOLD }); ui.pop_font()
+    local sw, sh = ui.screen()
+    if input.pressed("J") then M.ShowTracker = not M.ShowTracker end
+    if not M.ShowTracker then return end
+    local w = 300
+    local x, y = sw - w - 20, max(M.portraitBottom or 150, 150) + 24
+    local lines = {}
+    for _, l in ipairs(q.lines) do lines[#lines + 1] = l end
+    local h = 76
+    for _, l in ipairs(lines) do h = h + 8 + 22 * wrapLines("Cíl: " .. l.text, w - 80) end
+    ui.panel("UI/hud/panel_ornate.png", x, y, w, h, 32, 40)
+    require("eryndor.widgets").Block(x, y, w, h)
+    ui.font("h2"); ui.text(x + w / 2, y + 16, "Sledování úkolů", { align = "center", color = "#f0dcaa", shadow = true }); ui.pop_font()
+    ui.rect(x + 24, y + 46, w - 48, 1, "#d8b25a80", 0)
+    -- zavřít
+    local mx, my = ui.mouse()
+    local cx, cy = x + w - 34, y + 14
+    local hot = mx >= cx and mx < cx + 22 and my >= cy and my < cy + 22
+    ui.rect(cx, cy, 22, 22, hot and "#7a2a1a" or "#3a1410", 3)
+    ui.rect(cx, cy, 22, 22, GOLD, 3, false, 1)
+    ui.font("small"); ui.text(cx + 11, cy + 1, "X", { align = "center", color = TEXT }); ui.pop_font()
+    if hot and input.pressed("Mouse1") then M.ShowTracker = false end
+    ui.font("body")
+    ui.text(x + 26, y + 54, "• " .. q.title, { color = "#ffe8b0", shadow = true })
+    ui.pop_font()
     ui.font("small")
-    for i, l in ipairs(q.lines) do ui.text(sw - 386, 236 + (i - 1) * 26, l.text, { color = l.done and "#80d080" or TEXT }) end
+    local yy = y + 84
+    for _, l in ipairs(lines) do
+        ui.text(x + 40, yy, "•", { color = l.done and "#80d080" or GOLD })
+        ui.text(x + 58, yy, (l.done and "" or "Cíl: ") .. l.text, { color = l.done and "#80d080" or TEXT, wrap = w - 80 })
+        yy = yy + 8 + 22 * wrapLines("Cíl: " .. l.text, w - 80)
+    end
     ui.pop_font()
 end
 
@@ -204,20 +246,58 @@ local function playerArrow(cx, cy, size, yaw)
     ui.rect(cx - 4, cy - 4, 8, 8, "#fff6c0", 4)
 end
 
--- minimapa v pravém horním rohu (výřez velké mapy kolem hráče)
+-- minimapa vlevo nahoře (předloha): kulatý výřez mapy kolem hráče v kompasu se zlatým prstencem (N/E/S/W),
+-- pod ní panel s názvem místa a aktuálním cílem
+M.MinimapSize = 1.0   -- násobek velikosti (nastavení → Rozhraní)
+local function locationName(px, pz)
+    if map.Region(px, pz) == "a" then
+        local q = require("eryndor.quest")
+        if (px - (q.Aerin and q.Aerin.x or 0)) ^ 2 + (pz - (q.Aerin and q.Aerin.z or 0)) ^ 2 < 140 ^ 2 then return "Valorie Harbor" end
+        return "Valorie"
+    end
+    return map.RegionName(px, pz)
+end
+M.LocationName = locationName
+
 function M.DrawMinimap()
-    local sw = ui.screen()
-    local size, x, y = 210, sw - 230, 20
+    local R = floor(118 * (M.MinimapSize or 1))
+    local cx, cy = 24 + R, 20 + R
     local px, _, pz = player.Pos()
     local u, v = map.ToMap(px, pz)
-    local span = 600 / map.Size          -- 600 m na šířku minimapy
-    frame(x - 6, y - 6, size + 12, size + 40)
-    ui.draw_image(MAP_IMG, x, y, size, size, nil, u - span / 2, v - span / 2, u + span / 2, v + span / 2)
-    playerArrow(x + size / 2, y + size / 2, 10, player.facing)
-    ui.font("small")
-    ui.text(x + size / 2, y + size + 6, map.RegionName(px, pz), { align = "center", color = GOLD, shadow = true })
-    ui.text(x + size - 4, y + 2, "M", { align = "right", color = DIM })
-    ui.pop_font()
+    local span = 520 / map.Size          -- 520 m přes průměr mapy
+    local r = R * 0.78
+    ui.circle(cx, cy, r + 2, "#0a0e16", true)
+    ui.draw_image_round(MAP_IMG, cx, cy, r, nil, u - span / 2, v - span / 2, u + span / 2, v + span / 2)
+    -- body zájmu v dosahu (portály, kapitán Aerin, Lyrise)
+    local q = require("eryndor.quest")
+    local val = require("eryndor.valoria")
+    local marks = { { val.CityPortal, "#6fd8ff" }, { val.OutpostPortal, "#6fd8ff" }, { map.Lyrise, "#9fc8ff" },
+                    { q.Aerin, "#ffd890" } }
+    for _, m in ipairs(marks) do
+        if m[1] then
+            local dx, dz = (m[1].x - px) / (span * map.Size) * 2 * r, (m[1].z - pz) / (span * map.Size) * 2 * r
+            if dx * dx + dz * dz < (r - 8) ^ 2 then
+                ui.circle(cx + dx, cy + dz, 5, m[2], true)
+                ui.circle(cx + dx, cy + dz, 5, "#10141c", false, 1.5)
+            end
+        end
+    end
+    playerArrow(cx, cy, 10, player.facing)
+    ui.draw_image("UI/hud/compass_ring.png", cx - R, cy - R, 2 * R, 2 * R)
+    -- lokace a cíl
+    local w = 2 * R + 40
+    local x, y = cx - w / 2, cy + R + 6
+    local goal = q.Tracker and q.Tracker()
+    local line = goal and goal.lines[1] and goal.lines[1].text
+    local nl = line and wrapLines(line, w - 70) or 0
+    ui.panel("UI/hud/panel_ornate_light.png", x, y, w, 52 + nl * 22, 28, 40)
+    ui.font("h2"); ui.text(cx, y + 12, locationName(px, pz), { align = "center", color = "#fff2d0", shadow = true }); ui.pop_font()
+    if line then
+        ui.font("small")
+        ui.text(x + 18, y + 42, "Cíl:", { color = GOLD, shadow = true })
+        ui.text(x + 52, y + 42, line, { color = TEXT, shadow = true, wrap = w - 64 })
+        ui.pop_font()
+    end
 end
 
 -- velká mapa celého světa (klávesa M)
