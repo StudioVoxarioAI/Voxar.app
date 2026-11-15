@@ -38,6 +38,7 @@ DECK_WIDTH = 14.0                      # mostovka (Most hrdinů má 20 m – roz
 CORE_WIDTH = 11.0                      # klenby a pilíře pod mostovkou
 DECK_THICK = 1.1
 PARAPET_H, PARAPET_T = 1.15, 0.55
+FORT_S, FORT_H = 62.0, 2.3             # předmostí u brány: zeď 2,3 m s cimbuřím (výskok postavy je 1,8 m)
 PIER_SPACING = 34.0
 EXTEND = 14.0                          # mostovka pokračuje za LANDING pod terén
 CHUNKS = 1
@@ -243,12 +244,14 @@ def build():
         # římsa pod mostovkou
         P["parapet"].append(ribbon(c, nr, -DECK_WIDTH / 2 - 0.25, DECK_WIDTH / 2 + 0.25, dk - DECK_THICK - 0.45,
                                    dk - DECK_THICK + 0.05, (first, last)))
+        # u brány (předmostí nad útesem) vysoké cimbuřové zdi – z mostu se nedá seskočit na skalní římsu
+        ph = np.where(s[sl] <= FORT_S, FORT_H, PARAPET_H)
         for side in (-1, 1):
             o = side * (DECK_WIDTH / 2 - PARAPET_T / 2)
-            P["parapet"].append(ribbon(c, nr, o - PARAPET_T / 2, o + PARAPET_T / 2, dk - 0.05, dk + PARAPET_H,
+            P["parapet"].append(ribbon(c, nr, o - PARAPET_T / 2, o + PARAPET_T / 2, dk - 0.05, dk + ph,
                                        (first, last)))
             P["parapet"].append(ribbon(c, nr, o - PARAPET_T / 2 - 0.12, o + PARAPET_T / 2 + 0.12,
-                                       dk + PARAPET_H, dk + PARAPET_H + 0.18, (first, last)))
+                                       dk + ph, dk + ph + 0.18, (first, last)))
         # klenby a plné zdi
         P["core"].append(ribbon(c, nr, -CORE_WIDTH / 2, CORE_WIDTH / 2, bt, un + 0.02, (first, last)))
         # opěrák předmostí: v plné šířce mostovky až pod terén (lícuje s bránou a s útesem)
@@ -282,8 +285,16 @@ def build():
         if foot < rel(SEA_Y) < top:
             P["parapet"].append(oriented_box((cx, rel(SEA_Y) + 0.4, cz), T[i], (CORE_WIDTH + 3.0, 3.0, pier_w + 2.0)))
 
+    # cimbuří na zdech předmostí
+    for ps in np.arange(1.5, FORT_S - 1.0, 2.4):
+        i = int(np.argmin(np.abs(s - ps)))
+        for side in (-1, 1):
+            o = side * (DECK_WIDTH / 2 - PARAPET_T / 2)
+            cx, cz = Cl[i] + Nrm[i] * o
+            parts_by_chunk[0]["parapet"].append(
+                oriented_box((cx, rel(deck[i]) + FORT_H + 0.18 + 0.5, cz), T[i], (PARAPET_T + 0.1, 1.0, 1.2)))
     # sloupky zábradlí po 12 m
-    for ps in np.arange(6.0, land_s, 12.0):
+    for ps in np.arange(FORT_S + 6.0, land_s, 12.0):
         i = int(np.argmin(np.abs(s - ps)))
         k = min(int(np.searchsorted(edges, i, side="right") - 1), CHUNKS - 1)
         for side in (-1, 1):

@@ -674,39 +674,104 @@ def harbor_quay():
     _strip([(z - cz, x0 - cx, x0 + 1.6 - cx) for z in np.linspace(z0, z1, 3)], edge, thickness=3.0)
     for z in np.arange(z0 + 6, z1 - 3, 12):   # pacholata
         edge.append(cylinder(0.25, 0.3, 0.7, 10).translate(x0 + 0.8 - cx, 0.0, z - cz))
-    return [(merge(*cobble), COBBLE), (merge(*edge), dict(LIME, name="quay edge"))]
+    # pískovcové pásy dlažby po 12 m (člení velkou plochu nábřeží)
+    bands = []
+    for x in np.arange(x0 + 12, x1 - 2, 12):
+        bands.append(b(x - cx, -0.01, 0, 0.9, 0.05, z1 - z0))
+    for z in np.arange(z0 + 12, z1 - 2, 12):
+        bands.append(b((x0 + 1.6 + x1) / 2 - cx, -0.012, z - cz, x1 - x0 - 1.6, 0.05, 0.9))
+    return [(merge(*cobble), dict(COBBLE, color=(1.0, 0.92, 0.8))), (merge(*edge), dict(LIME, name="quay edge")),
+            (merge(*bands), dict(LIME, name="quay bands"))]
 
 
 def floating_island(seed):
-    """Létající ostrov (fantasy svět předlohy): převrácený rozeklaný skalní kužel s travnatým vrcholem,
-    visícími balvany, zříceninou a vodopádem padajícím z okraje."""
+    """Létající ostrov (předloha): rozeklaný skalní blok z několika visících balvanů s vrstvami barev (světlý
+    pískovec nahoře, tmavá skála dole), travnatý vršek s převisem drnu, visící liány, zřícenina a vodopád."""
     rng = np.random.default_rng(seed)
-    r = rng.uniform(40, 58)
-    prof = [(0.4, -r * 1.7), (r * 0.3, -r * 1.25), (r * 0.62, -r * 0.7), (r * 0.9, -r * 0.25), (r, -0.6), (r * 0.98, 0.0)]
-    rock = [lathe(prof, 24, True, False)]
-    displace(rock[0], r * 0.14, 0.18, seed)
-    for k in range(5):   # visící skalní hroty pod ostrovem
+    r = rng.uniform(40, 56)
+    # vršek: mírně klenutý nepravidelný disk trávy s převisem (drn přes hranu skály)
+    top_prof = [(1e-4, 1.6)] + [(r * f, 1.6 * (1 - f * f) + 0.2) for f in np.linspace(0.15, 1.0, 8)] + [(r * 1.04, -0.6), (r * 0.98, -1.4)]
+    top = lathe(top_prof, 40, False, False)
+    displace(top, r * 0.015, 0.06, seed + 1, along_normal=False)
+    edge_w = 1.0 + 0.10 * np.sin(np.arctan2(top.P[:, 2], top.P[:, 0]) * 5 + seed)
+    top.P[:, 0] *= edge_w
+    top.P[:, 2] *= edge_w
+    top = _orient(top, lambda c: np.array([c[0], c[1] + r, c[2]]))   # líc trávy nahoru a ven
+    top.flat = False
+    # skalní tělo: shluk protažených balvanů pod vrškem (ořezané nahoře do roviny)
+    rock = []
+    for k in range(7):
         a = rng.uniform(0, 2 * math.pi)
-        rr = rng.uniform(0.25, 0.6) * r
-        h = rng.uniform(0.5, 0.9) * r
-        sp = lathe([(0.3, -h), (r * 0.12, -h * 0.5), (r * 0.18, 0.0)], 10, True, False)
-        displace(sp, r * 0.03, 0.5, seed + 10 + k)
-        rock.append(sp.translate(math.cos(a) * rr, -r * 0.35, math.sin(a) * rr))
-    top = cylinder(r * 0.97, r * 0.97, 0.8, 24).translate(0, -0.4, 0)
-    displace(top, 0.5, 0.3, seed + 1)
-    ruin = [b(r * 0.2, 2.0, 0, 3, 4, 3), cylinder(1.3, 1.2, 7, 10).translate(-r * 0.3, 0, r * 0.2),
-            b(-r * 0.3, 7.2, r * 0.2, 2.8, 0.4, 2.8)]
-    # vodopád z okraje: tenký svislý pruh vody a pěna dole
+        rr = (0.0 if k == 0 else rng.uniform(0.25, 0.6)) * r
+        rad = (0.95 if k == 0 else rng.uniform(0.35, 0.55)) * r
+        depth = rad * rng.uniform(1.3, 1.9)
+        blob = sphere(1.0, 24, 16).scale(rad, depth, rad * rng.uniform(0.8, 1.1))
+        blob.P[:, 1] = np.minimum(blob.P[:, 1], 0.0) - 0.5
+        blob.translate(math.cos(a) * rr, 0, math.sin(a) * rr)
+        blob.P[:, 0] *= 1.0
+        displace(blob, rad * 0.22, 0.07, seed + 10 + k)
+        blob.P[:, 1] = np.minimum(blob.P[:, 1], -0.9)   # balvany nesmí prorazit travnatý vršek
+        blob.invalidate()
+        rock.append(blob)
+    rock = merge(*rock)
+    y = rock.P[:, 1]
+    t = np.clip(-y / (r * 1.6), 0, 1)[:, None]
+    strata = 0.5 + 0.5 * np.sin(y * 0.55 + np.sin(rock.P[:, 0] * 0.05) * 2.0)
+    warm, dark = np.array([1.0, 0.88, 0.7]), np.array([0.42, 0.36, 0.32])
+    rock.C[:, :3] = (warm * (1 - t) + dark * t) * (0.85 + 0.15 * strata[:, None])
+    # liány visící z okraje
+    vines = []
+    for k in range(26):
+        a = rng.uniform(0, 2 * math.pi)
+        L = rng.uniform(3.0, 11.0)
+        vines.append(box(0.35, L, 0.35).translate(math.cos(a) * r * 0.97, -0.8 - L / 2, math.sin(a) * r * 0.97))
+    ruin = [b(r * 0.2, 2.0, 0, 3, 4, 3), cylinder(1.6, 1.4, 9, 12).translate(-r * 0.3, 0, r * 0.2),
+            cone(2.2, 4.0, 12).translate(-r * 0.3, 9.0, r * 0.2), b(r * 0.05, 1.2, r * 0.3, 6, 2.4, 0.8)]
     wa = rng.uniform(0, 2 * math.pi)
-    wx, wz = math.cos(wa) * r * 0.97, math.sin(wa) * r * 0.97
-    water = [box(4.0, r * 1.1, 0.4).rotate(0, -math.degrees(wa) + 90, 0).translate(wx, -r * 0.55, wz),
-             box(1.2, 0.5, 6.0).rotate(0, -math.degrees(wa), 0).translate(wx * 0.94, 0.05, wz * 0.94)]
+    wx, wz = math.cos(wa) * r * 1.0, math.sin(wa) * r * 1.0
+    water = [box(4.5, r * 1.3, 0.5).rotate(0, -math.degrees(wa) + 90, 0).translate(wx, -r * 0.65, wz),
+             box(1.4, 0.4, r * 0.5).rotate(0, -math.degrees(wa), 0).translate(wx * 0.75, 1.0, wz * 0.75)]
     grass = dict(name="grass top", texture=str(ASSETS / "Textures" / "terrain" / "pbr" / "trava_albedo.jpg"), uv_scale=4.0,
                  roughness=1.0)
+    vine = dict(name="vines", color=(0.16, 0.3, 0.1), roughness=0.9)
     fall = dict(name="waterfall", color=(0.75, 0.88, 0.95), roughness=0.15, emissive=(0.45, 0.6, 0.7),
                 emissive_strength=0.6, double=True)
-    return [(merge(*rock), dict(LIME, color=(0.8, 0.74, 0.66), name="island rock")), (top, grass),
+    return [(rock, dict(LIME, name="island rock", uv_scale=4.0)), (top, dict(grass, color=(0.55, 0.85, 0.38))), (merge(*vines), vine),
             (merge(*ruin), LIME), (merge(*water), fall)]
+
+
+def crates(seed):
+    """Hromada beden a sudů na nábřeží (náklad lodí)."""
+    rng = np.random.default_rng(seed)
+    wood, dark, iron = [], [], []
+    for k in range(5):
+        x, z = rng.uniform(-2.5, 2.5), rng.uniform(-2.0, 2.0)
+        sz = rng.uniform(0.9, 1.3)
+        lvl = 0 if k < 3 else 1
+        wood.append(b(x * (0.5 if lvl else 1), sz / 2 + lvl * 1.15, z * (0.5 if lvl else 1), sz, sz, sz)
+                    .rotate(0, rng.uniform(-20, 20), 0))
+    for k in range(4):
+        a = k * 1.6 + seed
+        x, z = 3.4 + math.cos(a) * 1.0, math.sin(a) * 1.2
+        dark.append(cylinder(0.42, 0.42, 1.15, 14).translate(x, 0, z))
+        iron.append(cylinder(0.45, 0.45, 0.08, 14).translate(x, 0.2, z))
+        iron.append(cylinder(0.45, 0.45, 0.08, 14).translate(x, 0.9, z))
+    return [(merge(*wood), PLANKS), (merge(*dark), dict(WOOD, color=(0.8, 0.7, 0.6))), (merge(*iron), IRON)]
+
+
+def market_stall(seed, color):
+    """Tržní stánek: pult, čtyři sloupky a plátěná stříška, zboží na pultu."""
+    rng = np.random.default_rng(seed)
+    wood = [b(0, 0.5, 0.6, 3.6, 1.0, 1.0)]
+    for sx in (-1.7, 1.7):
+        for sz in (-0.4, 1.1):
+            wood.append(b(sx, 1.35 if sz > 0 else 1.6, sz, 0.14, 2.7 if sz > 0 else 3.2, 0.14))
+    roof = [box(4.2, 0.08, 2.3).rotate(-12, 0, 0).translate(0, 2.95, 0.35)]
+    goods = []
+    for k in range(6):
+        goods.append(sphere(0.18, 8, 6).translate(-1.4 + k * 0.55, 1.15, 0.5 + rng.uniform(-0.2, 0.2)))
+    gm = dict(name="goods", color=tuple(rng.uniform([0.5, 0.2, 0.05], [0.95, 0.6, 0.2])), roughness=0.6)
+    return [(merge(*wood), WOOD), (merge(*roof), cloth(color, "stall cloth")), (merge(*goods), gm)]
 
 
 def generate():
@@ -733,6 +798,10 @@ def generate():
     save("city_wall_6", city_wall(length=6.0))
     save("city_paving", city_paving())
     save("harbor_quay", harbor_quay())
+    save("crates", crates(70))
+    save("market_stall_0", market_stall(71, (1.9, 0.62, 0.45)))
+    save("market_stall_1", market_stall(72, (0.75, 1.35, 1.2)))
+    save("market_stall_2", market_stall(73, (2.4, 2.0, 1.1)))
     stairs_data()
     save("wall_tower", wall_tower(30))
     save("harbor_stairs", stairs())

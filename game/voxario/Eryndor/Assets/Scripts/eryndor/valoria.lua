@@ -327,6 +327,14 @@ function M.Build()
     W.spawn(C .. "harbor_quay.glb", (2604 + 2677) / 2, M.HarborY + 0.06, (2446 + 2636) / 2,
         { name = "Nábřeží", collider = "mesh" })
     M.GrassExclude[#M.GrassExclude + 1] = { 2640, 2540, 60 }
+    -- život na nábřeží: náklad u mol, tržní stánky před přístavními domy
+    local qy = M.HarborY + 0.06
+    for i, z in ipairs({ 2476, 2540, 2604 }) do
+        W.spawn(C .. "crates.glb", 2624, qy, z + (i % 2 == 0 and -6 or 6), { yaw = i * 37, name = "Náklad", collider = "box" })
+    end
+    for i, z in ipairs({ 2486, 2508, 2556, 2578, 2612 }) do
+        W.spawn(C .. "market_stall_" .. (i % 3) .. ".glb", 2666, qy, z, { yaw = -90, name = "Tržní stánek", collider = "box" })
+    end
     -- schodiště vytesané do útesu (model v absolutních výškách, počátek = spodní konec osy)
     local st = M.StairsData
     W.spawn(C .. "harbor_stairs.glb", st.bottom.x, 0, st.bottom.z, { name = "Přístavní schodiště", collider = "mesh" })
@@ -343,7 +351,7 @@ function M.Build()
         for t2 = 0, 5 do   -- stromy na vrcholu
             local a = t2 * 1.05 + i
             local rr = (t2 % 2 == 0) and 14 or 24
-            W.spawn("Models/nature/tree_" .. (t2 % 3) .. ".glb", s2[1] + cos(a) * rr, s2[3] - 0.2, s2[2] + sin(a) * rr,
+            W.spawn("Models/nature/tree_" .. (t2 % 3) .. ".glb", s2[1] + cos(a) * rr, s2[3] + (rr < 20 and 1.4 or 1.0), s2[2] + sin(a) * rr,
                 { yaw = t2 * 60, scale = 1.6, name = "Strom" })
         end
     end
