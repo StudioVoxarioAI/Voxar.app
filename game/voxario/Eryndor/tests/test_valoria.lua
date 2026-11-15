@@ -2,7 +2,7 @@ package.path = "game/voxario/Eryndor/Assets/Scripts/?.lua;" .. package.path
 -- Valorie Harbor (předloha): brána VALORIE, obloukový most k bráně, ulice s domy a lucernami, čtvrti, katedrála,
 -- věže, hrad na skále, hradby, přístav s moly a loděmi, létající ostrovy, portály
 
-local calls, instanceCalls = {}, {}
+local calls, instanceCalls, roadCalls = {}, {}, {}
 local function ground(x, z)
     -- plošina 50 m (mírně zvlněná), hradní skála 62 m, kolem moře
     local dx, dz = x - 3000, z - 2400
@@ -20,6 +20,10 @@ world = {
     instances = function(...)
         instanceCalls[#instanceCalls + 1] = { ... }
         return #instanceCalls
+    end,
+    road = function(o)
+        roadCalls[#roadCalls + 1] = o
+        return #roadCalls
     end,
 }
 
@@ -95,15 +99,10 @@ assert(valoria.NearPortal(0, 0) == nil)
 
 -- tráva neroste na ulici, náměstí ani pod domy; dlažba ulice
 assert(#valoria.GrassExclude > 100)
-local paving
-for _, ic in ipairs(instanceCalls) do if ic[1] == "Models/valoria/paving.glb" then paving = ic end end
-assert(paving and #paving[2] > 500, "street and plaza paving")
-for _, tile in ipairs(paving[2]) do
-    local x, y, z = tile[1], tile[2], tile[3]
-    if x > gx + valoria.Gate.depth / 2 + 1 then
-        local top = -math.huge
-        for dx = -1, 1 do for dz = -1, 1 do top = math.max(top, ground(x + dx, z + dz)) end end
-        assert(y >= top + 0.03 - 1e-6, "paving clears the terrain")
-    end
-end
+-- ulice, náměstí a cesta k hradu jako pásy na terénu (world.road = kolize terénu, nic se nepropadá)
+assert(#roadCalls >= 8, "street, plaza strips and castle path")
+local main = roadCalls[1]
+assert(main.width == valoria.Street.width and main.texture:find("cobble", 1, true))
+assert(math.abs(main.points[1][1] - (gx + valoria.Gate.depth / 2 + 7.5)) < 1e-6, "street starts at the end of the gate ramp")
+for _, r in ipairs(roadCalls) do assert(#r.points >= 2 and (r.lift or 0) <= 0.06) end
 print("Valorie Harbor: OK")

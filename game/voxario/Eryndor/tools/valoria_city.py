@@ -111,6 +111,18 @@ def banner(x, y, z, width, height, facing=1.0):
                    (x - width / 2, y, zz), (0, 0, facing))
 
 
+def window_unit(x, y, z, w, h, wood, glass, sill):
+    """Okno do +Z: sklo (svítí / tmavé), dřevěný rám, křížová příčle, kamenný parapet."""
+    glass.append(b(x, y, z + 0.01, w, h, 0.06))
+    for dx in (-1, 1):
+        wood.append(b(x + dx * (w / 2 + 0.04), y, z + 0.05, 0.1, h + 0.16, 0.1))
+    for dy in (-1, 1):
+        wood.append(b(x, y + dy * (h / 2 + 0.04), z + 0.05, w + 0.16, 0.1, 0.1))
+    wood.append(b(x, y, z + 0.06, 0.05, h, 0.05))
+    wood.append(b(x, y + h * 0.12, z + 0.06, w, 0.05, 0.05))
+    sill.append(b(x, y - h / 2 - 0.1, z + 0.12, w + 0.3, 0.1, 0.24))
+
+
 # ------------------------------------------------------------------ prvky
 def windows(width, depth, levels, y0, step, seed, glow_ratio=0.35, round_r=None):
     """Úzká gotická okna na čtyřech stranách; část svítí (teplé světlo zevnitř)."""
@@ -144,7 +156,7 @@ def spire_tower(w, h, spire, seed, round_tower=False, belfry=True):
     """Gotická věž: kvádrový / válcový dřík s opěráky a římsami, zvonice s okny, vysoká jehlancová střecha
     z olova se čtyřmi fiálami a zlatou makovicí."""
     stone, roof, gold, dark, lit = [], [], [], [], []
-    stone.append(b(0, 0.8, 0, w + 1.6, 1.6, w + 1.6))
+    stone.append(b(0, 0.8 - 4.0, 0, w + 1.6, 1.6 + 8.0, w + 1.6))   # sokl + základ 8 m pod terén
     if round_tower:
         r = w / 2
         stone.append(cylinder(r, r * 0.95, h, 20).translate(0, 0, 0))
@@ -205,7 +217,7 @@ def dome_hall(seed):
     """Kopulová rotunda (katedrála): kvádrová stavba s portikem, válcový tambur s okny, olověná kopule
     s lucernou a makovicí."""
     stone, roof, gold, dark, lit = [], [], [], [], []
-    stone.append(b(0, 6.5, 0, 22, 13, 22))
+    stone.append(b(0, 6.5 - 3.0, 0, 22, 13 + 6.0, 22))
     stone.append(b(0, 13.4, 0, 23, 0.8, 23))
     for x in np.linspace(-7.5, 7.5, 6):   # portikus
         stone.append(cylinder(0.7, 0.62, 10, 14).translate(x, 0, 12.5))
@@ -247,7 +259,7 @@ def house(seed, width=9.0, depth=8.0, floors=3, roof_mat=SLATE):
     """Hrázděný městský dům: kamenné přízemí, vysunutá patra s trámy, strmá střecha s vikýřem a komínem."""
     rng = np.random.default_rng(seed)
     stone, plaster, wood, roof, dark, lit = [], [], [], [], [], []
-    stone.append(b(0, 1.6, 0, width, 3.2, depth))
+    stone.append(b(0, 1.6 - 1.75, 0, width, 3.2 + 3.5, depth))   # přízemí + základ 3,5 m
     y = 3.2
     over = 0.0
     for f in range(floors - 1):
@@ -266,13 +278,12 @@ def house(seed, width=9.0, depth=8.0, floors=3, roof_mat=SLATE):
                 wood.append(box(0.18, math.hypot(dx, 2.6), 0.14).rotate(0, 0, math.degrees(math.atan2(dx, 2.6)) * (1 if (x > 0) else -1)).translate(x + dx / 2, y + 1.45, fz + 0.01))
         for x in np.linspace(-w / 2 + 0.15, w / 2 - 0.15, 5)[:-1]:   # okna mezi trámy
             dx = (w - 0.3) / 4
-            win = b(x + dx / 2, y + 1.55, fz + 0.03, dx * 0.5, 1.4, 0.08)
-            (lit if rng.random() < 0.35 else dark).append(win)
+            window_unit(x + dx / 2, y + 1.55, fz + 0.02, dx * 0.5, 1.4, wood, lit if rng.random() < 0.35 else dark, stone)
         wood.append(b(0, y - 0.15, fz - 0.1, w, 0.3, 0.5))   # zhlaví vysunutého patra
         y += 2.9
     # přízemí: dveře a výloha
     wood.append(b(-width * 0.22, 1.25, depth / 2 + 0.05, 1.3, 2.5, 0.12))
-    dark.append(b(width * 0.18, 1.5, depth / 2 + 0.05, 2.2, 1.4, 0.08))   # výloha (sklo)
+    window_unit(width * 0.18, 1.6, depth / 2 + 0.02, 2.2, 1.4, wood, dark, stone)   # výloha
     stone.append(b(width * 0.18, 0.7, depth / 2 + 0.25, 2.6, 0.3, 0.5))
     # střecha: hřeben podél X (štít do ulice z boku), sklon ~52°
     w, d = width + over, depth + over
@@ -322,7 +333,15 @@ def gate():
             stone.append(b(x, height + 0.9, z, 1.2, 1.8, 0.8))
     for sx in (-1, 1):   # tmavé obklady stěn průjezdu (průjezd zůstává volný)
         dark.append(b(sx * 4.42, 5.5, 0, 0.12, 11.0, thick - 0.6))
+    # základy: brána stojí na hraně útesu – věže i zeď pokračují 36 m dolů do skály
+    for sx in (-1, 1):
+        stone.append(b(sx * 10.5, -18.0, 0, 10.6, 36.0, 10.6))
+    stone.append(b(0, -18.0, 0, 12.0, 36.0, thick))
     parts += [(merge(*stone), LIME), (merge(*dark), dict(GLASS, color=(0.02, 0.02, 0.025)))]
+    # podlaha průjezdu (y = 0 = mostovka) a mírná rampa do města (−Z), obojí s kolizí
+    floor = [b(0, -0.25, 0, 8.8, 0.5, thick + 0.2),
+             box(8.8, 0.4, 8.1).rotate(5.0, 0, 0).translate(0, -0.55, -thick / 2 - 4.0)]
+    parts.append((merge(*floor), COBBLE))
     # deska s nápisem nad obloukem (obě strany) a zlatý rám
     sign, frame = [], []
     for sgn in (1, -1):
@@ -441,7 +460,7 @@ def dock(length=60.0, width=5.0):
 
 def city_wall(length=24.0, height=9.0, thick=3.2):
     """Úsek hradeb s cimbuřím (osa X, vnější líc +Z)."""
-    stone = [b(0, height / 2 - 1.5, 0, length, height + 3.0, thick)]
+    stone = [b(0, height / 2 - 6.0, 0, length, height + 12.0, thick)]   # hradby až 12 m pod terén (svah útesu)
     for x in np.arange(-length / 2 + 0.9, length / 2, 2.2):
         stone.append(b(x, height + 0.8, thick / 2 - 0.35, 1.2, 1.6, 0.7))
         stone.append(b(x, height + 0.8, -thick / 2 + 0.35, 1.2, 1.6, 0.7))

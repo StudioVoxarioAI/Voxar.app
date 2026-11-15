@@ -44,8 +44,9 @@ CHUNKS = 1
 MAX_GRADE = 0.11
 STEP = 2.0                             # vzorkování osy (m)
 
-STONE = va.STONE
-MASONRY = va.CASTLE_STONE
+STONE = dict(va.pbr("limestone", "sandstone parapet", 2.4))   # zábradlí a římsy ve stejném pískovci
+# medový pískovec jako brána a věže Valorie (předloha), mostovka z kočičích hlav
+MASONRY = dict(va.pbr("limestone", "sandstone masonry", 2.4))
 COBBLE = va.COBBLE
 
 

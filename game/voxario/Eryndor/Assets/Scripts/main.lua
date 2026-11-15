@@ -178,12 +178,44 @@ function Selftest()
         lookFrom(2560, 14, 2700, 2650, 6, 2530); timer.sleep(3); shot("v4-pristav")
         lookFrom(2400, 160, 2950, 2950, 40, 2330); timer.sleep(4); shot("v5-ostrov-z-vysky")
         lookFrom(3080, Y + 14, 2290, 3000, Y + 22, 2165); timer.sleep(3); shot("v6-kralovsky-hrad")
+        -- denní světlo: stíny a textury
+        _G.world.environment({ time_of_day = 14 })
+        lookFrom(2668, Y + 2.2, 2401, 2760, Y + 6, 2400); timer.sleep(3); shot("v9-brana-ve-dne")
+        lookFrom(2770, Y + 2.0, 2398, 2900, Y + 5, 2400); timer.sleep(3); shot("v10-ulice-ve-dne")
         _G.world.environment({ time_of_day = 21.5 })
         lookFrom(2560, Y + 22, 2470, 2800, Y + 18, 2380); timer.sleep(4); shot("v7-valorie-v-noci")
         _G.world.environment({ time_of_day = 15 })
         game_.EnterWorld(1)
         timer.sleep(2)
         shot("v8-start")
+        -- chůze bez propadání: postava stojí na viditelném povrchu (most, průjezd brány, ulice, náměstí, molo,
+        -- schodiště z přístavu); výška těla se kalibruje na mostě (rovná mostovka)
+        local function standAt(x, z, y0)
+            if y0 then   -- pod střechou (průjezd brány): přímo nad podlahu, dopadne na ni
+                entity.set_position(player.body, x, y0 + 1.0, z)
+                entity.set_velocity(player.body, 0, 0, 0)
+            else
+                player.Teleport(x, z)
+            end
+            timer.sleep(1.5)
+            local _, y = player.Pos()
+            return y
+        end
+        local bi = 4
+        local off = standAt(sky[bi][1], sky[bi][2]) - valoria.SkybridgeY(bi)
+        local function check(name, x, z, surface, under)
+            local feet = standAt(x, z, under and surface or nil) - off
+            game.log(string.format("STŮJ %s: %.2f (povrch %.2f)", name, feet, surface))
+            assert(math.abs(feet - surface) < 0.3, name .. ": player sinks or floats " .. string.format("%.2f", feet - surface))
+        end
+        check("prujezd-brany", valoria.Gate.x, valoria.Gate.z + 2, valoria.GateY, true)
+        check("ulice", 2850, 2401, G(2850, 2401) + 0.05)
+        check("namesti", valoria.Plaza.x + 6, valoria.Plaza.z - 6, G(valoria.Plaza.x + 6, valoria.Plaza.z - 6) + 0.05)
+        check("molo", valoria.Harbor.x0 - 20, 2532, valoria.HarborY + 0.05)
+        local st = valoria.Stairs
+        local mx, mz = (st.x0 + st.x1) / 2, (st.z0 + st.z1) / 2
+        check("schodiste", mx, mz, valoria.HarborY + 47.6 * 0.5)
+
         player.Teleport(valoria.OutpostPortal.x + 8, valoria.OutpostPortal.z)
         local x, _, z = player.Pos()
         assert(math.abs(x - (valoria.OutpostPortal.x + 8)) < 1 and math.abs(z - valoria.OutpostPortal.z) < 1)
@@ -960,7 +992,8 @@ function on_start()
     options.Apply()   -- uložené grafické nastavení (předvolba, stíny, textury, DLSS / FSR, FPS…)
     -- start ve Valorii za zlaté hodiny (jako na předloze Valorie Harbor), den pak plyne dál (60 min)
     _G.world.environment({ day_night = true, real_time = false, time_of_day = 19.4, day_length = 60, fog = 0.0006,
-                           shadow_distance = 260, haze = 0.45, exposure = 0.85, night_exposure = 1.6,
+                           -- ambient: rozptýlené světlo oblohy prosvětlí stíny (bez něj byly fasády ve stínu černé)
+                           shadow_distance = 260, haze = 0.45, exposure = 0.92, ambient = 0.62, night_exposure = 1.6,
                            contrast = 1.1, saturation = 1.22, clouds = 0.45, bloom = 0.12,
                            style = "realistic" })   -- realistické vykreslování enginu (fyzikální PBR + SSAO)
     world.Build()

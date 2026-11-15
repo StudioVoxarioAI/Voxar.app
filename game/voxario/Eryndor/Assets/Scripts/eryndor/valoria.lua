@@ -62,8 +62,8 @@ local function lamp(x, z, y, lit)
     y = y or map.HeightAt(x, z)
     W.spawn(C .. "lamp_post.glb", x, y - 0.05, z, { name = "Lucerna", collider = "box" })
     if lit then
-        W.spawn("light", x, y + 5.0, z, { light = { color = { 1.0, 0.68, 0.36 }, intensity = 16, range = 18,
-            night_only = true } })
+        -- svítí i za zlaté hodiny (předloha); ve dne je jejich světlo proti slunci zanedbatelné
+        W.spawn("light", x, y + 5.0, z, { light = { color = { 1.0, 0.68, 0.36 }, intensity = 16, range = 18 } })
     end
 end
 
@@ -112,38 +112,39 @@ local function skybridge()
     end
 end
 
--- ------------------------------------------------------------------ ulice a náměstí (dlažba)
+-- ------------------------------------------------------------------ ulice a náměstí (dlažba z kočičích hlav)
+-- world.road: pás leží přímo na terénu (výšky z kolizní mřížky) – postava se do dlažby nepropadá
+local COBBLE = "Textures/valoria/pbr/cobble"
+local function street(points, width, lift)
+    W.road({ points = points, width = width, tile = 2.0, lift = lift or 0.05, texture = COBBLE .. "_basecolor.jpg",
+        normal = COBBLE .. "_normal.jpg", orm = COBBLE .. "_orm.jpg", distance = 1500 })
+end
+M.StreetStart = nil
 local function paving()
-    local tiles = {}
-    local function tile(px, pz)
-        local hi = -math.huge
-        for dx = -1, 1 do
-            for dz = -1, 1 do hi = max(hi, map.HeightAt(px + dx, pz + dz)) end
-        end
-        tiles[#tiles + 1] = { px, hi + 0.03, pz, 0, 1 }
-    end
     local s = M.Street
-    for x = s.x0, s.x1, 2 do
-        for z = -s.width / 2 + 1, s.width / 2 - 1, 2 do tile(x, s.z + z) end
-        if x % 8 == 1 then M.GrassExclude[#M.GrassExclude + 1] = { x, s.z, 8 } end
-    end
-    -- průjezd brány: dlažba ve výšce mostovky (z mostu do města bez schodu)
-    for x = M.Gate.x - M.Gate.depth / 2 + 0.5, M.Gate.x + M.Gate.depth / 2 + 1, 2 do
-        for z = -4, 4, 2 do tiles[#tiles + 1] = { x, M.GateY + 0.0, s.z + z, 0, 1 } end
-    end
+    -- hlavní ulice: od konce rampy brány k náměstí
+    local x0 = M.Gate.x + M.Gate.depth / 2 + 7.5
+    M.StreetStart = x0
+    local pts = {}
+    for x = x0, M.Plaza.x - M.Plaza.r + 4, 8 do pts[#pts + 1] = { x, s.z } end
+    street(pts, s.width)
+    for x = x0, M.Plaza.x, 8 do M.GrassExclude[#M.GrassExclude + 1] = { x, s.z, 8 } end
+    -- náměstí: rovnoběžné pásy (střídavá výška – bez z-fightingu v překryvu)
     local p = M.Plaza
-    for x = -p.r, p.r, 2 do
-        for z = -p.r, p.r, 2 do
-            if x * x + z * z <= p.r * p.r then tile(p.x + x, p.z + z) end
-        end
+    local k = 0
+    for z = -p.r + 3, p.r - 3, 5.5 do
+        local half = math.sqrt(math.max(p.r * p.r - z * z, 0))
+        k = k + 1
+        street({ { p.x - half, p.z + z }, { p.x, p.z + z }, { p.x + half, p.z + z } }, 6.2, k % 2 == 0 and 0.06 or 0.05)
     end
     M.GrassExclude[#M.GrassExclude + 1] = { p.x, p.z, p.r + 3 }
-    -- cesta k hradu (sever) a ke katedrále
-    for z = 2368, 2240, -2 do
-        for x = -3, 3, 2 do tile(2990 + x + (2368 - z) * 0.08, z) end
-        if z % 8 == 0 then M.GrassExclude[#M.GrassExclude + 1] = { 2990 + (2368 - z) * 0.08, z, 6 } end
+    -- cesta z náměstí ke Královskému hradu (sever)
+    local path = {}
+    for z = M.Plaza.z - M.Plaza.r + 2, cz - 222, -8 do
+        path[#path + 1] = { 2990 + (2368 - z) * 0.08, z }
+        M.GrassExclude[#M.GrassExclude + 1] = { 2990 + (2368 - z) * 0.08, z, 6 }
     end
-    W.instances("Models/valoria/paving.glb", tiles, { distance = 700 })
+    street(path, 6)
 end
 
 -- ------------------------------------------------------------------ hradby po okraji plošiny
@@ -188,7 +189,7 @@ function M.Build()
     paving()
 
     -- brána VALORIE (průjezd podél osy X, průčelí na západ k mostu)
-    place("gate_valorie", M.Gate.x, M.Gate.z, { yaw = -90, w = 32, d = 9, y = M.GateY, sink = 0.06,
+    place("gate_valorie", M.Gate.x, M.Gate.z, { yaw = -90, w = 32, d = 9, y = M.GateY, sink = 0,
         name = "Brána Valorie", exclude = 20 })
 
     -- hlavní ulice: hrázděné domy po obou stranách, lucerny, sochy hrdinů
@@ -320,6 +321,31 @@ function M.Build()
         end
     end
 
+    -- zeleň: stromy na nižších svazích ostrova pod útesy a pár zahrad ve městě (předloha: zelené útesy a terasy)
+    local green = { {}, {}, {} }
+    local seed = 7
+    local function rnd()
+        seed = (seed * 1103515245 + 12345) % 2147483648
+        return seed / 2147483648
+    end
+    for _ = 1, 900 do
+        local a, r = rnd() * 2 * pi, 260 + rnd() * 300
+        local x, z = cx + cos(a) * r * 1.0, cz + sin(a) * r * 1.15
+        local h = map.HeightAt(x, z)
+        local pr = plateauRadius(x - cx, z - cz)
+        local inHarbor = x > M.Harbor.x0 - 10 and x < M.Harbor.x1 + 5 and z > M.Harbor.z0 - 10 and z < M.Harbor.z1 + 10
+        if pr > 1.1 and h > 3.5 and h < 30 and not inHarbor then
+            local k = floor(rnd() * 3) + 1
+            green[k][#green[k] + 1] = { x, h - 0.2, z, rnd() * 360, 0.9 + rnd() * 0.7 }
+        end
+    end
+    for k = 1, 3 do
+        if #green[k] > 0 then
+            W.instances("Models/nature/tree_" .. (k - 1) .. ".glb", green[k], { distance = 700, wind = 0.08, collider = "capsule",
+                radius = 0.35, height = 4 })
+            W.instances("Models/nature/tree_" .. (k - 1) .. "_far.glb", green[k], { distance = 2200, min_distance = 616, shadow = false })
+        end
+    end
     portal(M.CityPortal)
     portal(M.OutpostPortal)
 end
