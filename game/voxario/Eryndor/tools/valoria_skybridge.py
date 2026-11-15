@@ -31,9 +31,9 @@ DATA = ASSETS / "Scripts" / "eryndor" / "skybridge_data.lua"
 SIZE, BASE, RANGE = 8192.0, -80.0, 760.0
 SEA_Y = 0.0
 
-START = np.array([3000.0, 2670.0])     # jižní konec Mostu hrdinů (mostovka 20 x 200 m se středem z = 2570)
+START = np.array([2711.0, 2400.0])     # západní líc brány VALORIE na okraji plošiny města (50 m)
 LANDING = np.array([2007.0, 2329.0])   # temeno útesu hlavního ostrova
-TURN_RADIUS = 70.0                     # oblouk hned za Mostem hrdinů (z jihu na západ)
+GATE = (2718.0, 2400.0, 9.0, 12.0)     # střed brány, hloubka a šířka průjezdu (valoria.lua)
 DECK_WIDTH = 14.0                      # mostovka (Most hrdinů má 20 m – rozšíření u napojení)
 CORE_WIDTH = 11.0                      # klenby a pilíře pod mostovkou
 DECK_THICK = 1.1
@@ -72,21 +72,19 @@ def terrain(x, z):
 
 
 def hero_bridge_y():
-    """Stejně jako valoria.lua: nejvyšší místo terénu pod Mostem hrdinů + 6 cm (+ rezerva na detail)."""
-    xs, zs = np.meshgrid(np.arange(-10, 11) + 3000.0, np.arange(-100, 101) + 2570.0)
+    """Stejně jako valoria.lua (GateY): nejvyšší místo terénu pod průjezdem brány + 6 cm (+ rezerva na detail)."""
+    gx, gz, depth, width = GATE
+    xs, zs = np.meshgrid(np.arange(-depth / 2, depth / 2 + 0.5, 1.0) + gx, np.arange(-width / 2, width / 2 + 0.5, 1.0) + gz)
     return float(terrain(xs, zs).max()) + 0.06 + 0.45
 
 
 # ------------------------------------------------------------------ osa
 def centerline(step=STEP):
-    """Body osy po `step` m: oblouk z jihu na západ, pak hladká křivka (Bézier) přes moře na útes."""
+    """Body osy po `step` m: od brány rovně na západ nad přístavem, pak hladká křivka (Bézier) přes moře na útes."""
     pts = []
-    c = START + np.array([-TURN_RADIUS, 0.0])
-    arc_len = TURN_RADIUS * math.pi / 2
-    for i in range(int(arc_len / step)):
-        a = i * step / TURN_RADIUS
-        pts.append(c + TURN_RADIUS * np.array([math.cos(a), math.sin(a)]))
-    p0 = c + np.array([0.0, TURN_RADIUS])               # konec oblouku, směr -x
+    for s in np.arange(0.0, 60.0, step):
+        pts.append(START + np.array([-s, 0.0]))
+    p0 = START + np.array([-60.0, 0.0])                 # směr -x
     p3 = LANDING
     span = np.linalg.norm(p3 - p0)
     p1 = p0 + np.array([-1.0, 0.0]) * span * 0.42

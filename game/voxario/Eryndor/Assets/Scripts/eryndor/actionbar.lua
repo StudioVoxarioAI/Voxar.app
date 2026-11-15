@@ -97,6 +97,33 @@ function M.UnitFrame(x, y, id, name, level, hp, maxhp, mp, maxmp, opts)
     return w, h
 end
 
+-- portrét družiny (vpravo nahoře, jako na předloze): zlatý rám, ikona povolání / nepřítele, úroveň, pod ním
+-- životy (červeně) a mana (modře)
+function M.Portrait(x, y, id, name, level, hp, maxhp, mp, maxmp, opts)
+    opts = opts or {}
+    local now = game.time()
+    local dt = lastT and min(0.1, now - lastT) or 0.016
+    local size = opts.size or 84
+    ui.rect(x + 6, y + 6, size - 12, size - 12, opts.hostile and "#2a0c0a" or "#0c1424", 2)
+    if opts.icon then ui.draw_image("UI/icons/" .. opts.icon .. ".png", x + 8, y + 8, size - 16, size - 16) end
+    ui.draw_image("UI/hud/portrait_frame.png", x, y, size, size, opts.hostile and { 1, 0.62, 0.55, 1 } or nil)
+    ui.circle(x + size - 6, y + size - 6, 13, "#0a0806", true)
+    ui.circle(x + size - 6, y + size - 6, 13, opts.elite and "#ffd060" or GOLD, false, 2)
+    ui.font("small"); ui.text(x + size - 6, y + size - 17, tostring(level), { align = "center", color = TEXT }); ui.pop_font()
+    local f, g = smooth(id .. "hp", hp / max(1, maxhp), dt)
+    bar(x, y + size + 4, size, 9, f, g, "#c0282a", "#f0c06088")
+    if mp then
+        local fm, gm = smooth(id .. "mp", mp / max(1, maxmp), dt)
+        bar(x, y + size + 15, size, 7, fm, gm, "#2a6ae0", "#a0c0ff66")
+    end
+    if opts.label then
+        ui.font("small")
+        ui.text(x - 10, y + size / 2 - 12, name, { align = "right", color = opts.hostile and "#ff9a80" or "#e8f0ff", shadow = true })
+        ui.pop_font()
+    end
+    return size, size + (mp and 22 or 13)
+end
+
 function M.EndFrame() lastT = game.time() end
 
 -- ------------------------------------------------------------------ akční lišta
@@ -113,18 +140,30 @@ function M.ActionBar()
     local s = combat.me
     if not s then return end
     local sw, sh = ui.screen()
-    local size, gap = 60, 6
+    local size, gap = 58, 6
     local n = 12
-    local w = n * size + (n - 1) * gap
-    local x0, y0 = sw / 2 - w / 2, sh - 96
-    ui.panel("UI/hud/frame.png", x0 - 22, y0 - 18, w + 44, size + 36, 18, 22)
-    require("eryndor.widgets").Block(x0 - 22, y0 - 18, w + 44, size + 36)   -- kliknutí na lištu nevybírá cíl ve světě
+    local w = n * size + (n - 1) * gap + 18   -- mezera mezi dovednostmi a spotřebními předměty
+    local x0, y0 = sw / 2 - w / 2, sh - 104
+    ui.panel("UI/hud/panel_ornate.png", x0 - 20, y0 - 50, w + 40, size + 82, 32, 40)
+    require("eryndor.widgets").Block(x0 - 20, y0 - 50, w + 40, size + 82)   -- kliknutí na lištu nevybírá cíl ve světě
+    -- životy (vlevo, červeně) a mana (vpravo, modře) nad sloty, uprostřed erb Valorie
+    local dt = lastT and min(0.1, game.time() - lastT) or 0.016
+    local half = w / 2 - 38
+    ui.panel("UI/hud/bar_frame.png", x0 - 2, y0 - 38, half + 4, 26, 10, 14)
+    ui.panel("UI/hud/bar_frame.png", x0 + w - half - 2, y0 - 38, half + 4, 26, 10, 14)
+    local f, g = smooth("barhp", s.hp / max(1, s.maxhp), dt)
+    bar(x0 + 3, y0 - 33, half - 6, 16, f, g, "#c42a26", "#f0c06088", string.format("%d / %d", floor(s.hp), s.maxhp))
+    local fm, gm = smooth("barmp", s.mp / max(1, s.maxmp), dt)
+    bar(x0 + w - half + 3, y0 - 33, half - 6, 16, fm, gm, "#2a6ae0", "#a0c0ff66", string.format("%d / %d", floor(s.mp), s.maxmp))
+    ui.draw_image("UI/hud/emblem.png", sw / 2 - 34, y0 - 60, 68, 68)
+    -- zkušenosti pod lištou
+    ui.bar(x0, y0 + size + 10, w, 6, s.xp / combat.XpNeed(s.level), "#8a5ad8")
     local now = game.time()
     local mx, my = ui.mouse()
     local hover
     for k, sl in ipairs(M.Slots()) do
         local x = x0 + (k - 1) * (size + gap)
-        if k == 9 or k == 11 then x = x + 0 end
+        if k >= 9 then x = x + 18 end
         ui.draw_image("UI/hud/slot.png", x, y0, size, size)
         if sl.kind ~= "empty" then
             ui.draw_image("UI/icons/" .. sl.icon .. ".png", x + 3, y0 + 3, size - 6, size - 6)
@@ -186,8 +225,8 @@ function M.ActionBar()
         local c = s.casting
         local f = min(1, (now - c.start) / (c.dur + (c.pushback or 0)))
         local sk = s.skills[c.i]
-        ui.panel("UI/hud/frame_thin.png", sw / 2 - 190, y0 - 74, 380, 40, 10, 14)
-        bar(sw / 2 - 176, y0 - 64, 352, 20, f, f, "#d8b25a", "#00000000", sk and sk.name)
+        ui.panel("UI/hud/frame_thin.png", sw / 2 - 190, y0 - 112, 380, 40, 10, 14)
+        bar(sw / 2 - 176, y0 - 102, 352, 20, f, f, "#d8b25a", "#00000000", sk and sk.name)
     end
 end
 

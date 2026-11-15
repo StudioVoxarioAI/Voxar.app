@@ -226,3 +226,13 @@ voda. Vše přes Voxario Studio Engine.
   2,2–2,4 km – lesy na kopcích nezmizí. Tisíciletý strom fotorealisticky (kůra platanu, koruna z karet listí),
   tráva neroste na písku pláží (`avoid_layers`), opravený ukázkový doplněk SouradniceFPS (formát %d s desetinným
   FPS) včetně tiché opravy staré kopie u hráčů. Samotest `krajina` k11–k13, záběry `docs/screenshots/dohled`.
+- Valorie Harbor podle předlohy (Eryndor 0.15.0, engine v1.24.0): ostrov přestavěn (`tools/valoria_terrain.py`,
+  `tools/valoria_island.py` přepíše výškovou a splat mapu jen v oblasti ostrova) – město na skalní plošině 50 m,
+  hradní skála 62 m, přístavní terasa u hladiny pod branou. Stavebnice `tools/valoria_city.py` (fotoskeny CC0):
+  gotické věže se špičatými olověnými střechami a fiálami, kopulová katedrála a rotunda, hrázděné domy (4 druhy,
+  svítící okna), brána VALORIE s nápisem a prapory, litinové lucerny, hradby s věžemi, mola, plachetnice,
+  schodiště z přístavu, létající ostrovy se stromy. Obloukový most vede přímo k bráně (712 m). Husté čtvrti jako
+  instance (kolize kmenem). Kapitán Aerin v přístavu = první úkol „Valorie Harbor“. Start za zlaté hodiny.
+  HUD podle předlohy (`tools/eryndor_hud_art.py`): kulatá minimapa v kompasu (engine `ui.draw_image_round`),
+  lokace a cíl, portréty vpravo, zdobený panel úkolů (J), akční lišta s HP/MP a erbem; nastavení → Rozhraní.
+  Samotest `valoria` v0–v8, `ui` u0. Záběry `docs/screenshots/valorie-harbor`.

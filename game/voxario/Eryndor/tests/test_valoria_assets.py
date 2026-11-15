@@ -23,7 +23,7 @@ class ValoriaAssetsTest(unittest.TestCase):
             paths = sorted(Path(tmp).glob("*.glb"))
             self.assertEqual(
                 [path.stem for path in paths],
-                ["bridge", "gate", "hero", "house_blue", "house_red", "keep", "keep_floor", "keep_step", "paving"],
+                ["hero", "keep", "keep_floor", "keep_step", "paving"],
             )
             for path in paths:
                 with self.subTest(model=path.name):
@@ -42,8 +42,6 @@ class ValoriaAssetsTest(unittest.TestCase):
                             self.assertAlmostEqual(actual, expected)
                         for actual, expected in zip(bounds["max"], (1.0, 0.02, 1.0)):
                             self.assertAlmostEqual(actual, expected)
-                    if path.stem in ("house_blue", "house_red"):
-                        self.assertIn("weathered plaster", [m["name"] for m in document["materials"]])
                     if path.stem == "keep":
                         self.assertTrue({"castle masonry", "blue slate", "dark glass", "wood", "aged gold"}
                                         <= {m["name"] for m in document["materials"]})

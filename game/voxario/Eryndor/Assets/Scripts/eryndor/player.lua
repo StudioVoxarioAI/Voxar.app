@@ -22,6 +22,7 @@ function M.Create(class, spawn, appearance)
     M.class = class
     M.appearance = appearance
     local x, z = spawn.x, spawn.z
+    if spawn.yaw then M.facing = spawn.yaw; M.cam.yaw = spawn.yaw end   -- výchozí pohled (Valorie: na bránu)
     local y = map.HeightAt(x, z)
     local hit = physics.raycast(x, y + 60, z, 0, -1, 0, 80)   -- start na mostě / podlaze, ne pod nimi
     if hit and hit.point and hit.point.y > y then y = hit.point.y end

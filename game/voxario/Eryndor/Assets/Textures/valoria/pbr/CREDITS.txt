@@ -10,3 +10,6 @@ slate: https://polyhaven.com/a/roof_slates_03
 clay: https://polyhaven.com/a/roof_09
 linen: https://polyhaven.com/a/rough_linen
 marble: https://polyhaven.com/a/marble_rock_03
+planks: https://polyhaven.com/a/brown_planks_05
+limestone: https://polyhaven.com/a/medieval_blocks_03
+lead: https://polyhaven.com/a/roof_slates_02
