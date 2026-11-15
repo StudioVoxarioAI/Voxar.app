@@ -16,6 +16,14 @@ local function rnd()
 end
 local function rr(a, b) return a + (b - a) * rnd() end
 
+-- stromy: plný model do `near` m, za ním vzdálená verze z málo karet až do `far` m (engine ≥ 1.23: na hranici se
+-- plynule prolnou, vzdálená verze bez kolize a stínu) – lesy na kopcích nezmizí za hranicí dohledu
+local function trees(model, list, near, far, options)
+    options.distance = near
+    _G.world.instances(model .. ".glb", list, options)
+    _G.world.instances(model .. "_far.glb", list, { distance = far, min_distance = near * 0.88, shadow = false })
+end
+
 local function ground(x, z) return map.HeightAt(x, z) end
 M.Ground = ground
 
@@ -206,8 +214,8 @@ function M.BuildVerdant()
     local giants = scatter(24, "v", { hmin = 4, slope = 0.18, smin = 1.6, smax = 2.4 })
     W.instances("Models/nature/giant_tree.glb", giants, { collider = "capsule", radius = 2.4, height = 16, distance = 1500 })
     for k = 0, 2 do
-        W.instances("Models/nature/tree_" .. k .. ".glb", scatter(6000, "v", { hmin = 2.5, slope = 0.32, smin = 1.1, smax = 2.2 }),
-            { collider = "capsule", radius = 0.35, height = 4, distance = 550, wind = 0.1 })
+        trees("Models/nature/tree_" .. k, scatter(6000, "v", { hmin = 2.5, slope = 0.32, smin = 1.1, smax = 2.2 }), 550, 2200,
+            { collider = "capsule", radius = 0.35, height = 4, wind = 0.1 })
     end
     W.instances("Models/nature/fern.glb", scatter(9000, "v", { hmin = 2.5, smin = 0.8, smax = 1.6 }),
         { distance = 110, detail = true, wind = 0.08 })
@@ -218,8 +226,8 @@ end
 
 -- louky kolem řeky (střed kontinentu) a pobřeží
 function M.BuildMeadows()
-    W.instances("Models/nature/tree_1.glb", scatter(700, "m", { hmin = 3, slope = 0.25, smin = 1.0, smax = 1.7 }),
-        { collider = "capsule", radius = 0.35, height = 4, distance = 600, wind = 0.1 })
+    trees("Models/nature/tree_1", scatter(700, "m", { hmin = 3, slope = 0.25, smin = 1.0, smax = 1.7 }), 600, 2200,
+        { collider = "capsule", radius = 0.35, height = 4, wind = 0.1 })
     for k = 0, 2 do
         W.instances("Models/nature/rock_" .. k .. ".glb", scatter(350, "mbv", { hmin = 0.5, smin = 0.6, smax = 2.0, slope = 0.5 }),
             { distance = 400, collider = "capsule", radius = 0.8, height = 1.2 })
@@ -229,8 +237,8 @@ end
 -- Frostfang Peaks: zasněžené štíty, smrky na nižších svazích, zamrzlé jezero (led = povrch terénu, žádná voda)
 function M.BuildFrostfang()
     for k = 0, 2 do
-        W.instances("Models/nature/pine_" .. k .. ".glb", scatter(1800, "f", { hmin = 3, hmax = 240, slope = 0.35, smin = 0.9, smax = 1.5 }),
-            { collider = "capsule", radius = 0.3, height = 4, distance = 700, wind = 0.06 })
+        trees("Models/nature/pine_" .. k, scatter(1800, "f", { hmin = 3, hmax = 240, slope = 0.35, smin = 0.9, smax = 1.5 }),
+            700, 2400, { collider = "capsule", radius = 0.3, height = 4, wind = 0.06 })
     end
     W.instances("Models/nature/rock_dark.glb", scatter(900, "fk", { hmin = 3, slope = 0.6, smin = 0.8, smax = 2.6 }),
         { distance = 450, collider = "capsule", radius = 1.0, height = 1.6 })
@@ -401,7 +409,7 @@ function M.BuildGrass()
     for _, r in ipairs(M.RoadExclude or {}) do exclude[#exclude + 1] = r end
     M.grass = W.grass({ models = { "Models/nature/grass_clump_0.glb", "Models/nature/grass_clump_1.glb",
                                    "Models/nature/grass_clump_2.glb" },
-        layers = { 1 }, threshold = 0.3, density = 7.0, radius = 70, min_scale = 0.75, max_scale = 1.35,
+        layers = { 1 }, avoid_layers = { 3 }, threshold = 0.3, density = 7.0, radius = 70, min_scale = 0.75, max_scale = 1.35,
         max_slope = 36, min_height = map.SeaY + 0.6, wind = 0.12, tint = 0.2, exclude = exclude })
 end
 

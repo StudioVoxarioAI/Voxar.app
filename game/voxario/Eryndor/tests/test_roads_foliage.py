@@ -112,6 +112,25 @@ class FoliageTest(unittest.TestCase):
                 prim = doc["meshes"][0]["primitives"]
                 self.assertTrue(all("TEXCOORD_0" in p["attributes"] for p in prim))
 
+    def test_far_trees_are_light_and_giant_is_photoreal(self):
+        nat = ASSETS / "Models" / "nature"
+        for name in ["tree_0", "tree_1", "tree_2", "pine_0", "pine_1", "pine_2"]:
+            with self.subTest(model=name):
+                near, far = glb_json(nat / f"{name}.glb"), glb_json(nat / f"{name}_far.glb")
+                tris = lambda d: sum(d["accessors"][p["indices"]]["count"] // 3 for p in d["meshes"][0]["primitives"])
+                self.assertLess(tris(far), 120)
+                self.assertGreater(tris(near), tris(far) * 8)
+        giant = glb_json(nat / "giant_tree.glb")
+        names = [m["name"] for m in giant["materials"]]
+        self.assertIn("foliage", names)
+        self.assertIn("glow", names)
+
+    def test_world_draws_far_trees_and_grass_avoids_sand(self):
+        lua = (ASSETS / "Scripts" / "eryndor" / "world.lua").read_text(encoding="utf-8")
+        self.assertIn('_far.glb", list, { distance = far, min_distance = near * 0.88, shadow = false }', lua)
+        self.assertEqual(lua.count('trees("Models/nature/'), 3)
+        self.assertIn("avoid_layers = { 3 }", lua)
+
     def test_atlases_have_transparency(self):
         for name in ["grass_clumps", "leaf_twigs", "fir_twigs"]:
             a = np.asarray(Image.open(ASSETS / "Textures" / "nature" / "foliage" / f"{name}.png").getchannel("A"))

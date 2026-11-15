@@ -35,13 +35,30 @@ eryndor.on("draw", function()
   local p = eryndor.player()
   if not p then return end
   local sw = ui.screen()
-  ui.text(sw - 20, 300, string.format("%.0f, %.0f, %.0f  ·  %d FPS", p.x, p.y, p.z, fps), { align = "right", color = "#c8e0ff", shadow = true })
+  ui.text(sw - 20, 300, string.format("%.0f, %.0f, %.0f  ·  %.0f FPS", p.x, p.y, p.z, fps), { align = "right", color = "#c8e0ff", shadow = true })
 end)
 eryndor.notify("Doplněk Souřadnice a FPS je zapnutý.")
 ]]
 
+-- verze ukázky do 0.13.0 měla ve formátu %d s desetinným FPS a hned po zapnutí padala ("number has no integer
+-- representation") – neupravenou starou kopii hráčům tiše opraví
+local function repairExample(dir)
+    if not (fs and fs.read and fs.write and fs.exists) then return end
+    local path = dir .. "/SouradniceFPS/main.lua"
+    if not fs.exists(path) then return end
+    local ok, text = pcall(fs.read, path)
+    if not ok or type(text) ~= "string" then return end
+    local broken = '"%.0f, %.0f, %.0f  ·  %d FPS"'
+    local s, e = text:find(broken, 1, true)
+    if s then
+        fs.write(path, text:sub(1, s - 1) .. '"%.0f, %.0f, %.0f  ·  %.0f FPS"' .. text:sub(e + 1))
+    end
+end
+M.RepairExample = repairExample
+
 local function ensureExample(dir)
     if not (fs and fs.exists and fs.mkdir and fs.write) then return end
+    repairExample(dir)
     if fs.exists(dir .. "/SouradniceFPS/mod.json") then return end
     if fs.exists(dir .. "/.example") then return end   -- hráč ukázku smazal
     fs.mkdir(dir)
