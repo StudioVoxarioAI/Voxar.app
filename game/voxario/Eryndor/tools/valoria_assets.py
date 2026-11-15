@@ -26,7 +26,8 @@ WOOD = pbr("timber", "wood", 2.0)                       # trámy hrázděných d
 BLUE = pbr("slate", "blue slate", 3.0)                  # břidlicové střechy
 RED = pbr("clay", "red tile", 4.0)                      # pálené tašky
 CLOTH = pbr("linen", "blue cloth", 0.27, double=True)    # markýzy a prapory
-MARBLE = pbr("marble", "weathered marble", 1.8)         # sochy hrdinů
+MARBLE = pbr("marble", "weathered marble", 1.8)         # (dříve sochy hrdinů)
+LIME = pbr("limestone", "sandstone", 2.0)              # podstavce soch
 GOLD = dict(name="aged gold", color=(0.53, 0.37, 0.14), roughness=0.4, metallic=0.75)
 GLASS = dict(name="dark glass", color=(0.05, 0.09, 0.12), roughness=0.25, metallic=0.05)
 
@@ -58,14 +59,22 @@ def generate():
     # Most hrdinů, stará brána a domy nahradila stavebnice Valorie Harbor (tools/valoria_city.py)
     save("paving", [(b(0, -0.08, 0, 2, 0.2, 2), COBBLE)])
 
-    statue = [b(0, 0.8, 0, 3.8, 1.6, 3.8),
-              cylinder(0.5, 0.38, 2.8, 16).translate(-0.65, 1.6, 0),
-              cylinder(0.5, 0.38, 2.8, 16).translate(0.65, 1.6, 0),
-              sphere(1, 16, 12).scale(1.25, 1.55, 0.65).translate(0, 5.25, 0),
-              cylinder(0.42, 0.48, 2.5, 16).translate(-1.5, 4.3, 0),
-              cylinder(0.42, 0.48, 2.5, 16).translate(1.5, 4.3, 0),
-              sphere(0.68, 16, 12).translate(0, 7.2, 0)]
-    save("hero", [(merge(*statue), MARBLE)])
+    # socha hrdiny: stupňovitý podstavec z pískovce, rytíř v plášti s mečem a štítem (bílý kámen)
+    base = [b(0, 0.35, 0, 4.4, 0.7, 4.4), b(0, 1.05, 0, 3.8, 0.7, 3.8), b(0, 2.0, 0, 3.0, 1.2, 3.0),
+            b(0, 2.75, 0, 3.4, 0.3, 3.4)]
+    fig = [cylinder(0.32, 0.26, 2.0, 12).translate(-0.4, 3.9, 0), cylinder(0.32, 0.26, 2.0, 12).translate(0.4, 3.9, 0),
+           b(-0.4, 3.0, 0.12, 0.5, 0.25, 0.8), b(0.4, 3.0, 0.12, 0.5, 0.25, 0.8),
+           cylinder(0.75, 0.62, 2.0, 16).translate(0, 5.6, 0),              # trup v kroužkové zbroji
+           cylinder(0.8, 0.8, 0.25, 16).translate(0, 4.75, 0),              # opasek
+           cone(1.15, 3.6, 16).translate(0, 3.2, -0.25).scale(1, 1, 0.55),  # plášť
+           sphere(0.42, 16, 12).scale(1, 0.85, 1).translate(-0.95, 6.55, 0), sphere(0.42, 16, 12).scale(1, 0.85, 1).translate(0.95, 6.55, 0),
+           cylinder(0.22, 0.2, 1.1, 10).translate(0, 6.95, 0),
+           sphere(0.42, 16, 12).scale(1, 1.15, 1).translate(0, 7.55, 0),     # hlava
+           cylinder(0.24, 0.2, 1.6, 10).rotate(0, 0, 25).translate(1.15, 5.85, 0.2),     # pravá paže
+           cylinder(0.24, 0.2, 1.6, 10).rotate(0, 0, -20).translate(-1.15, 5.9, 0.3),    # levá paže
+           cylinder(0.85, 0.85, 0.14, 20).rotate(90, 0, 0).translate(-1.35, 5.3, 0.55),  # štít
+           b(1.45, 6.6, 0.25, 0.1, 3.2, 0.22), b(1.45, 5.05, 0.25, 0.8, 0.12, 0.25)]    # meč vztyčený, záštita
+    save("hero", [(merge(*base), LIME), (merge(*fig), dict(PLASTER, color=(0.93, 0.93, 0.9), name="statue stone"))])
 
     keep = [b(0, 8, -11, 35, 16, 2),
             b(-16.5, 8, 0, 2, 16, 20), b(16.5, 8, 0, 2, 16, 20),

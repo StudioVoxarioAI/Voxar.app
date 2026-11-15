@@ -280,6 +280,37 @@ def house(seed, width=9.0, depth=8.0, floors=3, roof_mat=SLATE):
             dx = (w - 0.3) / 4
             window_unit(x + dx / 2, y + 1.55, fz + 0.02, dx * 0.5, 1.4, wood, lit if rng.random() < 0.35 else dark, stone)
         wood.append(b(0, y - 0.15, fz - 0.1, w, 0.3, 0.5))   # zhlaví vysunutého patra
+        # hrázdění i na bocích a vzadu (čtvrti jsou natočené všemi směry, holá omítka působila jako krabice)
+        zc0 = over * 0.5
+        for sx in (-1, 1):
+            xs = sx * (w / 2 + 0.04)
+            zs = np.linspace(zc0 - d / 2 + 0.15, zc0 + d / 2 - 0.15, 4)
+            for z in zs:
+                wood.append(b(xs, y + 1.45, z, 0.16, 2.9, 0.22))
+            wood.append(b(xs, y + 0.1, zc0, 0.16, 0.25, d))
+            wood.append(b(xs, y + 2.8, zc0, 0.16, 0.22, d))
+            dz = zs[1] - zs[0]
+            for k, z in enumerate(zs[:-1]):
+                if k == 1:   # okno uprostřed boku
+                    (lit if rng.random() < 0.3 else dark).append(b(xs + sx * 0.03, y + 1.6, z + dz / 2, 0.08, 1.2, dz * 0.45))
+                    wood.append(b(xs + sx * 0.05, y + 0.95, z + dz / 2, 0.12, 0.12, dz * 0.6))
+                    continue
+                a = math.degrees(math.atan2(dz, 2.6)) * (1 if k == 0 else -1)
+                wood.append(box(0.14, math.hypot(dz, 2.6), 0.16).rotate(a, 0, 0).translate(xs, y + 1.45, z + dz / 2))
+        zb = zc0 - d / 2 - 0.04
+        xs_ = np.linspace(-w / 2 + 0.15, w / 2 - 0.15, 5)
+        for x in xs_:
+            wood.append(b(x, y + 1.45, zb, 0.22, 2.9, 0.16))
+        wood.append(b(0, y + 0.1, zb, w, 0.25, 0.16))
+        wood.append(b(0, y + 2.8, zb, w, 0.22, 0.16))
+        dx = xs_[1] - xs_[0]
+        for k, x in enumerate(xs_[:-1]):
+            if k in (1, 2):
+                (lit if rng.random() < 0.25 else dark).append(b(x + dx / 2, y + 1.6, zb - 0.03, dx * 0.45, 1.2, 0.08))
+                wood.append(b(x + dx / 2, y + 0.95, zb - 0.05, dx * 0.6, 0.12, 0.12))
+            else:
+                a = math.degrees(math.atan2(dx, 2.6)) * (1 if k == 0 else -1)
+                wood.append(box(0.18, math.hypot(dx, 2.6), 0.14).rotate(0, 0, a).translate(x + dx / 2, y + 1.45, zb))
         y += 2.9
     # přízemí: dveře a výloha
     wood.append(b(-width * 0.22, 1.25, depth / 2 + 0.05, 1.3, 2.5, 0.12))
@@ -300,13 +331,15 @@ def house(seed, width=9.0, depth=8.0, floors=3, roof_mat=SLATE):
                    [[0, 1, 2]] if sx > 0 else [[0, 2, 1]])
         plaster.append(tri)
         wood.append(b(x + sx * 0.02, y + rise * 0.45, zc, 0.12, rise * 0.9, 0.2))
+        wood.append(b(x + sx * 0.02, y + 0.12, zc, 0.12, 0.22, d))                    # vazný trám štítu
+        wood.append(b(x + sx * 0.02, y + rise * 0.5, zc, 0.12, 0.2, d * 0.5))         # hambalek
         lit.append(b(x + sx * 0.04, y + rise * 0.35, zc, 0.08, 1.0, 0.7)) if rng.random() < 0.5 else None
     # vikýř do ulice
     roof.append(b(0, y + rise * 0.35, zc + d / 2 - 0.6, 2.0, 1.8, 1.6))
     roof.append(box(2.6, 0.25, 1.9).rotate(0, 0, 0).translate(0, y + rise * 0.35 + 1.05, zc + d / 2 - 0.6))
     (lit if rng.random() < 0.5 else dark).append(b(0, y + rise * 0.33, zc + d / 2 + 0.22, 1.0, 1.0, 0.08))
     stone.append(b(w * 0.3, y + rise * 0.8, zc - 0.8, 0.9, rise * 0.9 + 1.2, 0.9))   # komín
-    return [(merge(*stone), STONE), (merge(*plaster), dict(PLASTER, color=tuple(rng.uniform([0.92, 0.85, 0.7], [1.05, 1.0, 0.92])))),
+    return [(merge(*stone), dict(LIME, color=(0.9, 0.88, 0.84))), (merge(*plaster), dict(PLASTER, color=tuple(rng.uniform([0.92, 0.85, 0.7], [1.05, 1.0, 0.92])))),
             (merge(*wood), WOOD), (merge(*roof), roof_mat), (merge(*dark), GLASS), (merge(*lit), GLOW)]
 
 
@@ -489,18 +522,35 @@ def stairs(length=150.0, rise=47.6, width=5.0):
 
 
 def floating_island(seed):
-    """Létající ostrov (fantasy svět): převrácený skalní kužel s travnatým vrcholem a malou zříceninou."""
+    """Létající ostrov (fantasy svět předlohy): převrácený rozeklaný skalní kužel s travnatým vrcholem,
+    visícími balvany, zříceninou a vodopádem padajícím z okraje."""
     rng = np.random.default_rng(seed)
-    r = rng.uniform(26, 40)
-    prof = [(0.4, -r * 1.6), (r * 0.35, -r * 1.1), (r * 0.75, -r * 0.45), (r, -0.6), (r * 0.98, 0.0)]
-    rock = lathe(prof, 18, True, False)
-    displace(rock, r * 0.12, 0.25, seed)
-    top = cylinder(r * 0.97, r * 0.97, 0.6, 18).translate(0, -0.3, 0)
-    displace(top, 0.3, 0.4, seed + 1)
-    ruin = [b(r * 0.2, 2.0, 0, 3, 4, 3), cylinder(1.3, 1.2, 7, 10).translate(-r * 0.3, 0, r * 0.2)]
+    r = rng.uniform(40, 58)
+    prof = [(0.4, -r * 1.7), (r * 0.3, -r * 1.25), (r * 0.62, -r * 0.7), (r * 0.9, -r * 0.25), (r, -0.6), (r * 0.98, 0.0)]
+    rock = [lathe(prof, 24, True, False)]
+    displace(rock[0], r * 0.14, 0.18, seed)
+    for k in range(5):   # visící skalní hroty pod ostrovem
+        a = rng.uniform(0, 2 * math.pi)
+        rr = rng.uniform(0.25, 0.6) * r
+        h = rng.uniform(0.5, 0.9) * r
+        sp = lathe([(0.3, -h), (r * 0.12, -h * 0.5), (r * 0.18, 0.0)], 10, True, False)
+        displace(sp, r * 0.03, 0.5, seed + 10 + k)
+        rock.append(sp.translate(math.cos(a) * rr, -r * 0.35, math.sin(a) * rr))
+    top = cylinder(r * 0.97, r * 0.97, 0.8, 24).translate(0, -0.4, 0)
+    displace(top, 0.5, 0.3, seed + 1)
+    ruin = [b(r * 0.2, 2.0, 0, 3, 4, 3), cylinder(1.3, 1.2, 7, 10).translate(-r * 0.3, 0, r * 0.2),
+            b(-r * 0.3, 7.2, r * 0.2, 2.8, 0.4, 2.8)]
+    # vodopád z okraje: tenký svislý pruh vody a pěna dole
+    wa = rng.uniform(0, 2 * math.pi)
+    wx, wz = math.cos(wa) * r * 0.97, math.sin(wa) * r * 0.97
+    water = [box(4.0, r * 1.1, 0.4).rotate(0, -math.degrees(wa) + 90, 0).translate(wx, -r * 0.55, wz),
+             box(1.2, 0.5, 6.0).rotate(0, -math.degrees(wa), 0).translate(wx * 0.94, 0.05, wz * 0.94)]
     grass = dict(name="grass top", texture=str(ASSETS / "Textures" / "terrain" / "pbr" / "trava_albedo.jpg"), uv_scale=4.0,
                  roughness=1.0)
-    return [(rock, STONE), (top, grass), (merge(*ruin), LIME)]
+    fall = dict(name="waterfall", color=(0.75, 0.88, 0.95), roughness=0.15, emissive=(0.45, 0.6, 0.7),
+                emissive_strength=0.6, double=True)
+    return [(merge(*rock), dict(LIME, color=(0.8, 0.74, 0.66), name="island rock")), (top, grass),
+            (merge(*ruin), LIME), (merge(*water), fall)]
 
 
 def generate():

@@ -314,10 +314,11 @@ function M.Build()
                     { 2150, 2850, 160, 2 }, { 3400, 2250, 240, 1 } }
     for i, s2 in ipairs(isles) do
         W.spawn(C .. "sky_island_" .. s2[4] .. ".glb", s2[1], s2[3], s2[2], { yaw = s2[1] % 360, name = "Létající ostrov" })
-        for t2 = 0, 2 do   -- stromy na vrcholu
-            local a = t2 * 2.1 + i
-            W.spawn("Models/nature/tree_" .. (t2 % 3) .. ".glb", s2[1] + cos(a) * 12, s2[3] - 0.2, s2[2] + sin(a) * 12,
-                { yaw = t2 * 120, scale = 1.4, name = "Strom" })
+        for t2 = 0, 5 do   -- stromy na vrcholu
+            local a = t2 * 1.05 + i
+            local rr = (t2 % 2 == 0) and 14 or 24
+            W.spawn("Models/nature/tree_" .. (t2 % 3) .. ".glb", s2[1] + cos(a) * rr, s2[3] - 0.2, s2[2] + sin(a) * rr,
+                { yaw = t2 * 60, scale = 1.6, name = "Strom" })
         end
     end
 
