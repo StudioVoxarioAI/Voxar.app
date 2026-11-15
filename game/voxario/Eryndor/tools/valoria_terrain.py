@@ -17,6 +17,11 @@ HARBOR_Y = 2.4
 PLATEAU_RX, PLATEAU_RZ, PLATEAU_DZ = 300.0, 400.0, -20.0
 # přístavní terasa (světové souřadnice): pod branou, jižně od obloukového mostu
 HARBOR = (2605.0, 2690.0, 2430.0, 2640.0)
+# schodiště z přístavu na plošinu: vytesané do útesu (podesty), model tools/valoria_city.py (harbor_stairs)
+STAIRS_BOTTOM = (2672.0, 2630.0)
+STAIRS_TOP = (2722.0, 2490.0)
+STAIRS_WIDTH = 5.0
+STAIRS_FLAT_BOTTOM, STAIRS_FLAT_TOP, STAIRS_LANDING, STAIRS_FLIGHT = 3.0, 4.0, 3.0, 14.0
 
 
 def _smoothstep(a, b, value):
@@ -39,6 +44,55 @@ def plateau_radius(dx, dz):
     return np.sqrt((dx / PLATEAU_RX) ** 2 + ((dz - PLATEAU_DZ) / PLATEAU_RZ) ** 2) / rim
 
 
+def stairs_axis():
+    a, b = np.array(STAIRS_BOTTOM), np.array(STAIRS_TOP)
+    length = float(np.linalg.norm(b - a))
+    d = (b - a) / length
+    return a, d, np.array([d[1], -d[0]]), length
+
+
+def stairs_layout():
+    """Ramena a podesty: [(u0, u1, y0, y1)] po délce osy (u od spodního konce)."""
+    _, _, _, length = stairs_axis()
+    avail = length - STAIRS_FLAT_BOTTOM - STAIRS_FLAT_TOP
+    n = max(1, int(round((avail + STAIRS_LANDING) / (STAIRS_FLIGHT + STAIRS_LANDING))))
+    flight = (avail - STAIRS_LANDING * (n - 1)) / n
+    rise = (PLATEAU_Y - HARBOR_Y) / n
+    parts, u, y = [(0.0, STAIRS_FLAT_BOTTOM, HARBOR_Y, HARBOR_Y)], STAIRS_FLAT_BOTTOM, HARBOR_Y
+    for k in range(n):
+        parts.append((u, u + flight, y, y + rise))
+        u, y = u + flight, y + rise
+        if k < n - 1:
+            parts.append((u, u + STAIRS_LANDING, y, y))
+            u += STAIRS_LANDING
+    parts.append((u, length, PLATEAU_Y, PLATEAU_Y))
+    return parts
+
+
+def stairs_y(u):
+    """Výška šlapadel podél osy (spojitě – schody se z ní kvantují po stupních)."""
+    u = np.asarray(u, np.float64)
+    y = np.full(u.shape, HARBOR_Y)
+    for u0, u1, y0, y1 in stairs_layout():
+        t = np.clip((u - u0) / max(u1 - u0, 1e-6), 0, 1)
+        y = np.where(u >= u0, y0 + (y1 - y0) * t, y)
+    return y
+
+
+def stairs_coords(x, z):
+    a, d, n, length = stairs_axis()
+    px, pz = x - a[0], z - a[1]
+    return px * d[0] + pz * d[1], px * n[0] + pz * n[1], length
+
+
+def stairs_corridor(x, z, margin=3.0):
+    """0..1: blízko osy schodiště (pro zahloubení terénu a masku detailu)."""
+    u, lat, length = stairs_coords(x, z)
+    along = _smoothstep(-margin, 0.0, u) * (1 - _smoothstep(length, length + margin, u))
+    across = 1 - _smoothstep(STAIRS_WIDTH / 2 + 1.0, STAIRS_WIDTH / 2 + margin, np.abs(lat))
+    return along * across
+
+
 def harbor_mask(x, z):
     x0, x1, z0, z1 = HARBOR
     inside_x = _smoothstep(x0 - 30, x0 + 5, x) * (1 - _smoothstep(x1 - 5, x1 + 12, x))
@@ -54,7 +108,7 @@ def apply(height, x, z):
     low = (10.0 + 2.5 * rolling) * (1 - _smoothstep(0.55, 0.85, coast_radius)) + 2.0
     # plošina města (téměř rovná – ulice a stavby) s útesy po obvodu
     pr = plateau_radius(dx, dz)
-    city = PLATEAU_Y + 0.6 * np.sin(dx / 53.0) * np.sin(dz / 71.0)
+    city = np.full_like(np.asarray(dx, np.float64), PLATEAU_Y)   # přesně rovná (dlažba, brána, domy lícují)
     cliff = _smoothstep(0.97, 1.06, pr)
     island = city * (1 - cliff) + low * cliff
     # hradní skála na severu
@@ -63,7 +117,22 @@ def apply(height, x, z):
     # přístavní terasa pod branou (rovná, kousek nad hladinou)
     hm = harbor_mask(x, z) * _smoothstep(1.0, 1.06, pr)   # útes plošiny zůstane nad terasou
     island = island * (1 - hm) + HARBOR_Y * hm
+    # schodiště: terén pod rameny o 0,4 m níž než šlapadla (schody ho zakryjí, opěrné zdi lemují zářez)
+    u, _, length = stairs_coords(x, z)
+    cut = stairs_y(np.clip(u, 0, length)) - 0.4
+    corridor = stairs_corridor(x, z)
+    island = np.where(corridor > 0, np.minimum(island, cut * corridor + island * (1 - corridor)), island)
     return height * (1.0 - mask) + island * mask, mask
+
+
+def detail_strength(x, z):
+    """0..1 jemného detailu terénu (engine detail_mask): město, přístav a schody rovné, jinde plný detail."""
+    dx, dz = x - CENTER_X, z - CENTER_Z
+    pr = plateau_radius(dx, dz)
+    flat = 1 - _smoothstep(0.93, 0.99, pr)
+    flat = np.maximum(flat, harbor_mask(x, z))
+    flat = np.maximum(flat, stairs_corridor(x, z, margin=8.0))
+    return 1.0 - flat
 
 
 def surface_weights(height, slope, noise):

@@ -178,6 +178,8 @@ function Selftest()
         lookFrom(2560, 14, 2700, 2650, 6, 2530); timer.sleep(3); shot("v4-pristav")
         lookFrom(2400, 160, 2950, 2950, 40, 2330); timer.sleep(4); shot("v5-ostrov-z-vysky")
         lookFrom(3080, Y + 14, 2290, 3000, Y + 22, 2165); timer.sleep(3); shot("v6-kralovsky-hrad")
+        lookFrom(2690, Y + 14, 2372, 2716, Y - 4, 2398); timer.sleep(3); shot("v11-predmosti-a-hradby")
+        lookFrom(2640, 12, 2665, 2700, 28, 2545); timer.sleep(3); shot("v12-schody-k-molu")
         -- denní světlo: stíny a textury
         _G.world.environment({ time_of_day = 14 })
         lookFrom(2668, Y + 2.2, 2401, 2760, Y + 6, 2400); timer.sleep(3); shot("v9-brana-ve-dne")
@@ -209,12 +211,15 @@ function Selftest()
             assert(math.abs(feet - surface) < 0.3, name .. ": player sinks or floats " .. string.format("%.2f", feet - surface))
         end
         check("prujezd-brany", valoria.Gate.x, valoria.Gate.z + 2, valoria.GateY, true)
-        check("ulice", 2850, 2401, G(2850, 2401) + 0.05)
-        check("namesti", valoria.Plaza.x + 6, valoria.Plaza.z - 6, G(valoria.Plaza.x + 6, valoria.Plaza.z - 6) + 0.05)
+        check("za-branou", valoria.StreetStart + 1.5, valoria.Gate.z + 3, valoria.GateY)
+        check("ulice", 2850, 2401, valoria.GateY)
+        check("namesti", valoria.Plaza.x + 6, valoria.Plaza.z - 6, valoria.GateY)
         check("molo", valoria.Harbor.x0 - 20, 2532, valoria.HarborY + 0.05)
-        local st = valoria.Stairs
-        local mx, mz = (st.x0 + st.x1) / 2, (st.z0 + st.z1) / 2
-        check("schodiste", mx, mz, valoria.HarborY + 47.6 * 0.5)
+        check("nabrezi", 2650, 2540, valoria.HarborY + 0.06)
+        local ld = valoria.StairsData.landings
+        for _, i in ipairs({ 1, math.floor(#ld / 2), #ld }) do
+            check("podesta-schodiste-" .. i, ld[i][1], ld[i][2], ld[i][3])
+        end
 
         player.Teleport(valoria.OutpostPortal.x + 8, valoria.OutpostPortal.z)
         local x, _, z = player.Pos()

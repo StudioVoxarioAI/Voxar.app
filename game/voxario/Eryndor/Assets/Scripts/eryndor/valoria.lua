@@ -15,7 +15,10 @@ M.PlateauY, M.KeepY, M.HarborY = 50, 62, 2.4
 M.Gate = { x = 2718, z = 2400, depth = 9, width = 12 }
 M.Harbor = { x0 = 2605, x1 = 2690, z0 = 2430, z1 = 2640 }
 M.Plaza = { x = 2945, z = 2400, r = 30 }
-M.Street = { x0 = 2723, x1 = 2915, z = 2400, width = 10 }
+M.Street = { x0 = 2723, x1 = 2915, z = 2400, width = 12 }
+-- schodiště z přístavu (tools/valoria_city.py -> valoria_stairs_data.lua; stejné jako valoria_terrain.py)
+M.StairsData = require("eryndor.valoria_stairs_data")
+M.Stairs = { x0 = M.StairsData.bottom.x, z0 = M.StairsData.bottom.z, x1 = M.StairsData.top.x, z1 = M.StairsData.top.z }
 
 -- start: na obloukovém mostě před branou, pohled na město (jako na předloze)
 M.Spawn = { x = 2672, z = 2400, yaw = 90 }   -- kamera i postava k bráně (na východ)
@@ -122,21 +125,14 @@ end
 M.StreetStart = nil
 local function paving()
     local s = M.Street
-    -- hlavní ulice: od konce rampy brány k náměstí
-    local x0 = M.Gate.x + M.Gate.depth / 2 + 7.5
+    -- hlavní ulice a náměstí: jeden dlážděný model s pískovcovými lemy a obrubníkem (tools/valoria_city.py),
+    -- na rovné plošině přesně v úrovni podlahy brány; kolizní síť – nic se nepropadá, žádné zubaté okraje
+    local x0 = M.Gate.x + M.Gate.depth / 2
     M.StreetStart = x0
-    local pts = {}
-    for x = x0, M.Plaza.x - M.Plaza.r + 4, 8 do pts[#pts + 1] = { x, s.z } end
-    street(pts, s.width)
+    M.Paving = W.spawn(C .. "city_paving.glb", M.Plaza.x, M.GateY, M.Plaza.z, { name = "Dlažba Valorie",
+        collider = "mesh" })
     for x = x0, M.Plaza.x, 8 do M.GrassExclude[#M.GrassExclude + 1] = { x, s.z, 8 } end
-    -- náměstí: rovnoběžné pásy (střídavá výška – bez z-fightingu v překryvu)
     local p = M.Plaza
-    local k = 0
-    for z = -p.r + 3, p.r - 3, 5.5 do
-        local half = math.sqrt(math.max(p.r * p.r - z * z, 0))
-        k = k + 1
-        street({ { p.x - half, p.z + z }, { p.x, p.z + z }, { p.x + half, p.z + z } }, 6.2, k % 2 == 0 and 0.06 or 0.05)
-    end
     M.GrassExclude[#M.GrassExclude + 1] = { p.x, p.z, p.r + 3 }
     -- cesta z náměstí ke Královskému hradu (sever)
     local path = {}
@@ -167,16 +163,40 @@ local function walls()
         last = p
         if acc >= 24 then seg[#seg + 1] = p; acc = 0 end
     end
+    local anchors = {}   -- konce ponechaných úseků nejblíž bráně (sever, jih)
     for i, p in ipairs(seg) do
         local q = seg[i % #seg + 1]
         local mx, mz = (p[1] + q[1]) / 2, (p[2] + q[2]) / 2
-        local nearGate = (mx - M.Gate.x) ^ 2 + (mz - M.Gate.z) ^ 2 < 22 ^ 2
-        local nearStairs = (mx - 2722) ^ 2 + (mz - 2490) ^ 2 < 16 ^ 2
+        local nearGate = (mx - M.Gate.x) ^ 2 + (mz - M.Gate.z) ^ 2 < 40 ^ 2
+        local nearStairs = (mx - M.Stairs.x1) ^ 2 + (mz - M.Stairs.z1) ^ 2 < 16 ^ 2
         local nearKeep = (mx - cx) ^ 2 / 160 ^ 2 + (mz - (cz - 235)) ^ 2 / 125 ^ 2 < 1
         if not nearGate and not nearStairs and not nearKeep then
             local yaw = math.deg(atan(q[1] - p[1], q[2] - p[2])) - 90
             place("city_wall", mx, mz, { yaw = yaw, w = 24, d = 3, sink = 1.2, name = "Hradby Valorie" })
             if i % 4 == 0 then place("wall_tower", p[1], p[2], { w = 7, d = 7, sink = 0.6, name = "Hradební věž" }) end
+            for _, e in ipairs({ p, q }) do
+                local side = e[2] < M.Gate.z and "n" or "s"
+                local d2 = (e[1] - M.Gate.x) ^ 2 + (e[2] - M.Gate.z) ^ 2
+                if d2 < 70 ^ 2 and (not anchors[side] or d2 < anchors[side].d2) then
+                    anchors[side] = { x = e[1], z = e[2], d2 = d2 }
+                end
+            end
+        end
+    end
+    -- hradby od věží brány k nejbližším úsekům (6m díly): žádná mezera mezi bránou a hradbou
+    for side, sg in pairs({ n = -1, s = 1 }) do
+        local an = anchors[side]
+        if an then
+            local x0, z0 = M.Gate.x, M.Gate.z + sg * 15.0
+            local len = sqrt((an.x - x0) ^ 2 + (an.z - z0) ^ 2)
+            local n = math.max(1, math.ceil(len / 5.5))
+            local yaw = math.deg(atan(an.x - x0, an.z - z0)) - 90
+            for k = 0, n - 1 do
+                local t = (k + 0.5) / n
+                place("city_wall_6", x0 + (an.x - x0) * t, z0 + (an.z - z0) * t,
+                    { yaw = yaw, w = 6, d = 3, sink = 1.2, name = "Hradby Valorie" })
+            end
+            place("wall_tower", an.x, an.z, { w = 7, d = 7, sink = 0.6, name = "Hradební věž" })
         end
     end
 end
@@ -303,11 +323,17 @@ function M.Build()
         place("house_" .. floor(z / 17) % 4, h.x1 - 9, z, { yaw = -90, w = 10, d = 9, name = "Přístavní dům",
             y = M.HarborY, sink = 0.3 })
     end
-    -- schodiště z přístavu podél útesu na plošinu (dole u terasy, nahoře u okraje města)
-    local sx, sz, ex, ez = 2672, 2630, 2722, 2490
-    W.spawn(C .. "harbor_stairs.glb", sx, M.HarborY, sz, { yaw = math.deg(atan(ex - sx, ez - sz)),
-        name = "Přístavní schodiště", collider = "mesh" })
-    M.Stairs = { x0 = sx, z0 = sz, x1 = ex, z1 = ez }
+    -- dlážděné nábřeží od schodiště k molům
+    W.spawn(C .. "harbor_quay.glb", (2604 + 2677) / 2, M.HarborY + 0.06, (2446 + 2636) / 2,
+        { name = "Nábřeží", collider = "mesh" })
+    M.GrassExclude[#M.GrassExclude + 1] = { 2640, 2540, 60 }
+    -- schodiště vytesané do útesu (model v absolutních výškách, počátek = spodní konec osy)
+    local st = M.StairsData
+    W.spawn(C .. "harbor_stairs.glb", st.bottom.x, 0, st.bottom.z, { name = "Přístavní schodiště", collider = "mesh" })
+    for i, l in ipairs(st.landings) do   -- lucerny na podestách (střídavě po stranách)
+        local side = (i % 2 == 0) and 1 or -1
+        lamp(l[1] + l[4] * side * 2.0, l[2] + l[5] * side * 2.0, l[3], i % 2 == 1)
+    end
 
     -- létající ostrovy na obloze (fantasy svět předlohy)
     local isles = { { 3650, 1900, 150, 0 }, { 2300, 1850, 175, 1 }, { 3700, 2900, 130, 2 }, { 3050, 1500, 210, 0 },
