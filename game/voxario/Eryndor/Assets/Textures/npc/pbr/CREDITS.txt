@@ -1,0 +1,5 @@
+Materiály brnění a oděvů NPC: fotoskeny Poly Haven (https://polyhaven.com), CC0 1.0.
+steel: https://polyhaven.com/a/metal_plate_02
+gold: https://polyhaven.com/a/metal_plate_02
+leather: https://polyhaven.com/a/brown_leather
+cloth: https://polyhaven.com/a/rough_linen

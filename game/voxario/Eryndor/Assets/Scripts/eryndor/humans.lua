@@ -7,6 +7,10 @@ M.Items = { sword = "sword_1handed", sword2 = "sword_2handed", shield = "shield_
             staff = "staff", wand = "wand", book = "spellbook_open", crossbow = "crossbow_1handed", crossbow2 = "crossbow_2handed",
             dagger = "dagger", axe = "axe_1handed", axe2 = "axe_2handed" }
 
+-- realistické verze předmětů (Models/gear/real) – zbytek z KayKitu
+M.Real = { sword_1handed = true, sword_2handed = true, dagger = true, axe_2handed = true, staff = true, shield_round = true,
+           crossbow_1handed = true, spellbook_open = true, wand = true }
+
 -- spawn postavy: path = "syl_knight_m" …, opts = {right, left, helm, scale, yaw, name, tag}
 function M.Spawn(path, x, y, z, opts)
     opts = opts or {}
@@ -32,6 +36,9 @@ function M.Dress(id, opts)
             local w
             if item:sub(1, 5) == "gear/" then
                 w = _G.world.spawn("Models/" .. item .. ".glb", 0, 0, 0, { name = item, scale = opts.gearScale or 1 })
+            elseif M.Real[M.Items[item] or item] then
+                -- realistické zbraně (tools/eryndor_weapons.py): skutečné rozměry a PBR materiály
+                w = _G.world.spawn("Models/gear/real/" .. (M.Items[item] or item) .. ".glb", 0, 0, 0, { name = item, scale = opts.gearScale or 1 })
             else
                 w = _G.world.spawn("Models/kaykit/items/" .. (M.Items[item] or item) .. ".gltf", 0, 0, 0, { name = item, scale = 0.8 })
             end
