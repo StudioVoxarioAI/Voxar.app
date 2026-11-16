@@ -513,6 +513,70 @@ function Selftest()
         game.quit()
         return
     end
+    if only == "postavy" then
+        -- všechny rasy s výbavou: držení zbraní, paže a nohy v klíčových klipech (každá postava zblízka z boku
+        -- a ze 3/4), detail rukou a obličeje (oči, mrkání)
+        local races = require("eryndor.races")
+        _G.world.environment({ time_of_day = 14.5 })
+        if graphics and graphics.detail_density then graphics.detail_density(0.0) end   -- tráva nezakrývá nohy
+        local bx, bz = map.Start.x - 24, map.Start.z - 3
+        local list = {}
+        for _, r in ipairs(races.Order) do
+            local d = races.Defs[r]
+            for v = 1, d.variants and #d.variants or 1 do
+                local a = races.Default(r); a.variant = v; list[#list + 1] = a
+            end
+        end
+        local ids = {}
+        local gap = 6.0
+        local function px(i) return bx + (i - (#list + 1) / 2) * gap end
+        for i, a in ipairs(list) do ids[i] = races.Spawn(a, px(i), G(px(i), bz), bz, { yaw = 180 }) end
+        timer.sleep(3)
+        local only1 = game.env("VOXARIO_CLIPS")
+        local clips = { { "Idle", 0, nil, "f" }, { "Idle", 0, nil, "s" }, { "Walking_A", 0, 0.3, "s" }, { "Running_A", 0, 0.3, "s" },
+                        { "Sprint", 0, 0.3, "s" }, { "Walking_Backwards", 0, 0.3, "s" }, { "2H_Melee_Idle", 0, nil, "q" },
+                        { "Combat_Idle", 0, nil, "q" }, { "1H_Melee_Attack_Chop", 0, 0.4, "q" },
+                        { "1H_Melee_Attack_Slice_Horizontal", 0, 0.45, "q" }, { "2H_Melee_Attack_Chop", 0, 0.45, "q" },
+                        { "Spellcast_Shoot", 0, 0.5, "q" }, { "Block", 0, 0.5, "q" }, { "1H_Ranged_Aiming", 0, nil, "q" },
+                        { "Jump_Idle", 0, nil, "s" }, { "Hit_A", 0, 0.3, "q" }, { "Interact", 0, 0.5, "q" } }
+        local n = 0
+        for _, c in ipairs(clips) do
+            if not only1 or only1:find(c[1], 1, true) then
+                n = n + 1
+                for i, id in ipairs(ids) do
+                    entity.set_rotation(id, 0, 180, 0)
+                    anim.play(id, c[1], 0, true, true)
+                end
+                timer.sleep(0.2)
+                for i, id in ipairs(ids) do   -- fáze klipu zmrazená (anim.seek, engine ≥ 1.27)
+                    if anim.seek then anim.seek(id, (c[3] or 0.25) * (anim.length(id, c[1]) or 1)) end
+                    anim.stop(id)
+                end
+                timer.sleep(0.25)
+                for i, id in ipairs(ids) do
+                    local x, h, s = px(i), G(px(i), bz), list[i].height
+                    local d = 3.2 * math.max(s, 0.85)
+                    if c[4] == "f" then lookFrom(x, h + 1.0 * s, bz - d, x, h + 0.9 * s, bz)
+                    elseif c[4] == "s" then lookFrom(x + d, h + 1.0 * s, bz, x, h + 0.85 * s, bz)
+                    else lookFrom(x + d * 0.7, h + 1.1 * s, bz - d * 0.7, x, h + 0.9 * s, bz) end
+                    timer.sleep(0.12); shot(string.format("a%02d-%d-%s", n, i, c[1]))
+                end
+            end
+        end
+        -- detail: ruce se zbraní a obličej (oči, mrkání)
+        for i, id in ipairs(ids) do anim.play(id, "Idle", 0, true, true) end
+        for i, id in ipairs(ids) do
+            local x, h, s = px(i), G(px(i), bz), list[i].height
+            local hy = h + 1.62 * s
+            lookFrom(x + 0.04, hy + 0.02, bz - 0.7 * s, x, hy - 0.03, bz)
+            timer.sleep(0.4); shot(string.format("o%02d-oci-%s", i, list[i].race))
+            lookFrom(x - 1.3 * s, h + 1.0 * s, bz - 1.2 * s, x, h + 0.85 * s, bz)
+            timer.sleep(0.2); shot(string.format("r%02d-ruce-%s", i, list[i].race))
+        end
+        game.log("SELFTEST hotovo")
+        game.quit()
+        return
+    end
     if only == "snaps" then
         -- ladění pohybů: statické snímky klipů (VOXARIO_SNAPS = klip@fáze,...) ze 3/4 pohledu
         _G.world.environment({ time_of_day = 14.5 })
