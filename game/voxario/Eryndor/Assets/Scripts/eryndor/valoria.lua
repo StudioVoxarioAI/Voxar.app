@@ -56,7 +56,7 @@ local function place(kind, x, z, opts)
     local y = (opts.y or lo) - (opts.sink or 0.25)
     local id = W.spawn(C .. kind .. ".glb", x, y, z, { yaw = opts.yaw or 0, name = opts.name or "Valorie",
         collider = opts.collider == false and nil or (opts.collider or "mesh"), scale = opts.scale })
-    M.Placed[#M.Placed + 1] = { kind = kind, x = x, z = z, id = id }
+    M.Placed[#M.Placed + 1] = { kind = kind, x = x, z = z, id = id, yaw = opts.yaw or 0, scale = opts.scale or 1 }
     if opts.exclude then M.GrassExclude[#M.GrassExclude + 1] = { x, z, opts.exclude } end
     return id, y
 end
@@ -231,6 +231,7 @@ function M.Build()
                       { 3150, 2520, 16 }, { 2945, 2345, 26 }, { M.Plaza.x, M.Plaza.z, M.Plaza.r + 10 }, { cx, cz - 235, 70 },
                       { M.Gate.x, M.Gate.z, 30 }, { 2722, 2490, 18 }, { M.CityPortal.x, M.CityPortal.z, 10 } }
     local district = { {}, {}, {}, {} }
+    M.District = {}   -- domy čtvrtí {kind, x, z, yaw} (překážky pro obyvatele v uličkách)
     for gx = 2730, 3290, 13 do
         for gz = 1990, 2790, 12 do
             local jx, jz = ((gx * 13 + gz * 7) % 5) - 2, ((gx * 3 + gz * 11) % 3) - 1
@@ -248,6 +249,7 @@ function M.Build()
                 local lo = groundRange(x, z, 10, 9, yaw)
                 local list = district[kind + 1]
                 list[#list + 1] = { x, lo - 0.25, z, yaw, 1 }
+                M.District[#M.District + 1] = { kind = "house_" .. kind, x = x, z = z, yaw = yaw, scale = 1 }
                 M.GrassExclude[#M.GrassExclude + 1] = { x, z, 6.5 }
             end
         end
