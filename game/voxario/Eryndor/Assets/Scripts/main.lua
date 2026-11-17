@@ -524,17 +524,21 @@ function Selftest()
         timer.sleep(25)   -- rozejdou se
         local cz = citizens
         local bad = 0
-        for _, n in ipairs(cz.list) do
+        for _, n in ipairs(cz.core) do
             local x, y, z = entity.get_position(n.id)
             if type(x) == "table" then x, y, z = x.x or x[1], x.y or x[2], x.z or x[3] end
             if n.role ~= "guard" and not cz.Walkable(x, z) then bad = bad + 1 end
             if math.abs(y - Y) > 0.01 then bad = bad + 1 end
         end
+        for _, n in ipairs(cz.town) do   -- uličky: nikdy ve stavbě, na terénu
+            if not cz.ClearAt(n.x, n.z, 0.45) or math.abs(n.y - map.HeightAt(n.x, n.z)) > 0.01 then bad = bad + 1 end
+        end
         assert(bad == 0, "NPC mimo dlažbu: " .. bad)
         -- Lua: cena aktualizace 30 NPC
         local c0 = os.clock()
         for _ = 1, 300 do citizens.Update(1 / 60, nil, nil) end
-        game.log(string.format("MESTO: citizens.Update %.3f ms / snímek (30 NPC)", (os.clock() - c0) / 300 * 1000))
+        game.log(string.format("MESTO: citizens.Update %.3f ms / snímek (%d NPC, %d uzlů uliček)", (os.clock() - c0) / 300 * 1000,
+            #cz.list, #cz.Nodes))
         lookFrom(2745, Y + 3.2, 2401, 2860, Y + 1.0, 2400); timer.sleep(1.5); shot("m1-ulice")
         lookFrom(2925, Y + 9, 2428, 2950, Y + 1, 2398); timer.sleep(1.5); shot("m2-namesti")
         local c = cz.captain
@@ -558,6 +562,20 @@ function Selftest()
                 break
             end
         end
+        -- obyvatelé uliček po celém městě a nábřeží (záběr na tři různá místa + přístav)
+        for i, k in ipairs({ 1, 6, 11 }) do
+            local n = cz.town[k]
+            if n then
+                local hy = math.rad(n.yaw)
+                lookFrom(n.x + math.sin(hy) * 4 + 1.5, n.y + 2.2, n.z + math.cos(hy) * 4 + 1.5, n.x, n.y + 1.0, n.z)
+                timer.sleep(0.8); shot(string.format("m6-ulicka-%d", i))
+            end
+        end
+        local h = cz.harbor[2]
+        if h then lookFrom(h.x + 6, h.y + 3, h.z + 5, h.x, h.y + 1, h.z); timer.sleep(0.8); shot("m7-nabrezi") end
+        lookFrom(2800, Y + 70, 2600, 2990, Y, 2330); timer.sleep(1.5); shot("m8-mesto-shora")
+        local gi = graphics.info and graphics.info()
+        if gi then game.log(string.format("MESTO: kreslicí příkazy %s", tostring(gi.draw_calls))) end
         game.log("SELFTEST hotovo")
         game.quit()
         return
