@@ -8,6 +8,7 @@ local combat = require("eryndor.combat")
 local hud = require("eryndor.hud")
 local quest = require("eryndor.quest")
 local citizens = require("eryndor.citizens")
+local wildlife = require("eryndor.wildlife")
 local valoria = require("eryndor.valoria")
 
 local deg, atan, sqrt = math.deg, math.atan, math.sqrt
@@ -1149,6 +1150,13 @@ function on_update(dt)
         local px, pz
         if mode == "play" then local x, _, z = player.Pos(); px, pz = x, z end
         citizens.Update(dt, px, pz)   -- obyvatelé Valorie
+        game_.envT = (game_.envT or 0) - dt
+        if game_.envT <= 0 then   -- denní doba pro zvěř (vytí vlků v noci) – stačí jednou za 2 s
+            game_.envT = 2
+            local env = _G.world.environment()
+            game_.tod = env and env.time_of_day or game_.tod
+        end
+        wildlife.Update(dt, px, pz, game_.tod)   -- zvěř v lesích
     end
     if mode ~= "play" and mode ~= "select" then return end
     if mode == "select" then creator.Update(dt); return end
