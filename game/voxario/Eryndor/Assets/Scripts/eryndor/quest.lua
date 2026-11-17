@@ -59,13 +59,26 @@ end
 
 function M.NearAerin() return near(M.Aerin) end
 
+function M.NearCaptain()
+    local px, _, pz = player.Pos()
+    return require("eryndor.citizens").NearCaptain(px, pz)
+end
+
 function M.NearNpc()
-    return near(map.Lyrise) or M.NearAerin()
+    return near(map.Lyrise) or M.NearAerin() or M.NearCaptain()
 end
 
 function M.Talk()
     if not M.NearNpc() then return end
     local close = function() M.dialog = nil end
+    if M.NearCaptain() then   -- hlavní kapitán Valorie: bude zadávat úkoly (zatím jen přivítání)
+        local cap = require("eryndor.citizens").captain
+        M.dialog = { who = cap.name, text =
+            "Vítej na náměstí Valorie, Ozvěno. Velím městské stráži a brzy pro tebe budu mít práci – " ..
+            "hlídky hlásí neklid za mostem i v přístavu. Vrať se za mnou, až budou rozkazy připravené.",
+            options = { { label = "Budu připraven, kapitáne", fn = close } } }
+        return
+    end
     if M.NearAerin() then
         if M.step == 1 then
             M.dialog = { who = "Kapitán Aerin", text =
