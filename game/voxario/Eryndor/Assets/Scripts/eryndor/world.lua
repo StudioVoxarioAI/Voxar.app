@@ -20,6 +20,7 @@ local function rr(a, b) return a + (b - a) * rnd() end
 -- plynule prolnou, vzdálená verze bez kolize a stínu) – lesy na kopcích nezmizí za hranicí dohledu
 local function trees(model, list, near, far, options)
     options.distance = near
+    require("eryndor.wildlife").AddTrunks(list, options.radius or 0.35)   -- zvěř obchází kmeny
     _G.world.instances(model .. ".glb", list, options)
     _G.world.instances(model .. "_far.glb", list, { distance = far, min_distance = near * 0.88, shadow = false })
 end
@@ -213,6 +214,7 @@ function M.BuildVerdant()
     -- další obří stromy rozeseté lesem
     local giants = scatter(24, "v", { hmin = 4, slope = 0.18, smin = 1.6, smax = 2.4 })
     W.instances("Models/nature/giant_tree.glb", giants, { collider = "capsule", radius = 2.4, height = 16, distance = 1500 })
+    require("eryndor.wildlife").AddTrunks(giants, 2.4)
     for k = 0, 2 do
         trees("Models/nature/tree_" .. k, scatter(6000, "v", { hmin = 2.5, slope = 0.32, smin = 1.1, smax = 2.2 }), 550, 2200,
             { collider = "capsule", radius = 0.35, height = 4, wind = 0.1 })
@@ -428,6 +430,8 @@ function M.Build()
     M.BuildCrystalarium()
     M.BuildOcean()
     M.BuildGrass()
+    -- zvěř v lesích: laně s jelenem, divočáci, vlci, medvědi (každé zvíře vlastní trasou)
+    require("eryndor.wildlife").Spawn({ scatter = scatter, free = free })
 end
 
 return M

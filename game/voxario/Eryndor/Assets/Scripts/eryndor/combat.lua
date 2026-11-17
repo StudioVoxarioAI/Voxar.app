@@ -72,8 +72,10 @@ M.Classes = {
 
 -- ------------------------------------------------------------------ nepřátelé
 M.MobTypes = {
-    wolf = { name = "Zkažený vlk", model = "Models/chars/wolf.glb", level = 1, hp = 90, atk = 9, def = 3, range = 1.9, speed = 1.6,
-             aggro = 9, run = 6.5, walk = 1.6, xp = 28, anims = { idle = "Idle", walk = "Walk", run = "Run", attack = { "Attack1" }, hit = "Hit", death = "Death" }, scale = 1.25 },
+    -- fotorealistický vlk (Quadruped Forge: srst z vrstev, IK nohou), do dálky zjednodušený model (lod)
+    wolf = { name = "Zkažený vlk", model = "Models/fauna/wolf.glb", level = 1, hp = 90, atk = 9, def = 3, range = 1.9, speed = 1.6,
+             aggro = 9, run = 6.5, walk = 1.6, xp = 28, anims = { idle = "Idle", walk = "Walk", run = "Run", attack = { "Attack1" }, hit = "Hit", death = "Death" },
+             scale = 1.08, lod = true },
     cultist = { name = "Kultista Prázdnoty", human = "cultist_m", level = 3, hp = 150, atk = 13, def = 6, range = 2.0, speed = 1.7,
                 aggro = 11, run = 5.2, walk = 1.5, xp = 55, look = { right = "dagger", left = "dagger" },
                 anims = { idle = "Idle", walk = "Walking_A", run = "Running_A", attack = { "Dualwield_Melee_Attack_Chop", "Dualwield_Melee_Attack_Slice", "Dualwield_Melee_Attack_Stab" }, hit = "Hit_A", death = "Death_A" } },
