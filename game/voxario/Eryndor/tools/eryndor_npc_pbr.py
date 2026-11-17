@@ -31,12 +31,12 @@ HUMANS = HERE.parent / "Assets" / "Models" / "humans"
 OUT = HERE.parent / "Assets" / "Textures" / "npc" / "pbr"
 MAPS = {"albedo": "Diffuse", "normal": "nor_gl", "arm": "arm"}
 
-# materiál dílu -> (fotosken, dlaždice v m, kovovost, násobek drsnosti, síla detailu barvy)
+# materiál dílu -> (fotosken, dlaždice v m, kovovost, násobek drsnosti, síla detailu barvy, zesílení normály)
 KINDS = {
-    "steel": ("metal_plate_02", 0.55, 1.0, 0.62, 0.35),     # kované pláty: jemné škrábance, mapy drsnosti
-    "gold": ("metal_plate_02", 0.4, 1.0, 0.45, 0.3),        # zlacené lemy a ozdoby (barvu dává návrh)
-    "leather": ("brown_leather", 0.32, 0.0, 1.0, 0.55),     # kůže: póry, švy, ohyby
-    "cloth": ("rough_linen", 0.22, 0.0, 1.0, 0.5),          # tkanina: vazba plátna
+    "steel": ("metal_plate_02", 0.5, 1.0, 0.78, 0.55, 1.7),    # tepané pláty: škrábance, nerovnosti, matnější
+    "gold": ("metal_plate_02", 0.35, 1.0, 0.6, 0.4, 1.3),      # zlacené lemy a ozdoby (barvu dává návrh)
+    "leather": ("brown_leather", 0.3, 0.0, 1.0, 0.8, 1.4),     # kůže: póry, švy, ohyby
+    "cloth": ("rough_linen", 0.12, 0.0, 1.0, 0.75, 1.8),        # hrubé plátno / vlna: vazba, chlupy, nerovnosti
 }
 
 
@@ -117,8 +117,10 @@ def add_image(j, b, data, mime, name):
 
 # ------------------------------------------------------------------ textury
 def build_maps(kind, cache, size):
-    asset, _, metal, rough_mul, detail = KINDS[kind]
+    asset, _, metal, rough_mul, detail, nboost = KINDS[kind]
     p = fetch(asset, cache, MAPS)
+    if "albedo" not in p:   # některé látky mají barevné varianty (col_01…) místo Diffuse
+        p.update(fetch(asset, cache, {"albedo": "col_01"}))
     OUT.mkdir(parents=True, exist_ok=True)
     alb = np.asarray(Image.open(p["albedo"]).convert("RGB").resize((size, size), Image.LANCZOS), np.float32) / 255
     lum = alb @ np.array([0.299, 0.587, 0.114])
@@ -127,11 +129,14 @@ def build_maps(kind, cache, size):
     det = 1.0 + (det - 1.0) * detail
     base = np.clip(det * 0.82, 0, 1)
     base_img = Image.fromarray((np.repeat(base[..., None], 3, 2) * 255 + 0.5).astype(np.uint8), "RGB")
-    nrm_img = Image.open(p["normal"]).convert("RGB").resize((size, size), Image.LANCZOS)
+    nrm = np.asarray(Image.open(p["normal"]).convert("RGB").resize((size, size), Image.LANCZOS), np.float32) / 127.5 - 1.0
+    nrm[..., :2] *= nboost                                          # výraznější reliéf (tepání, vazba látky)
+    nrm /= np.maximum(np.linalg.norm(nrm, axis=2, keepdims=True), 1e-6)
+    nrm_img = Image.fromarray(((nrm * 0.5 + 0.5) * 255 + 0.5).clip(0, 255).astype(np.uint8), "RGB")
     arm = np.asarray(Image.open(p["arm"]).convert("RGB").resize((size, size), Image.LANCZOS), np.float32) / 255
     orm = np.zeros_like(arm)
     orm[..., 0] = 0.55 + 0.45 * arm[..., 0]                         # okluze (jemně)
-    orm[..., 1] = np.clip(arm[..., 1] * rough_mul, 0.08, 1.0)       # drsnost
+    orm[..., 1] = np.clip(0.18 + arm[..., 1] * rough_mul, 0.25, 1.0) if metal > 0 else np.clip(arm[..., 1] * rough_mul, 0.08, 1.0)
     orm[..., 2] = metal                                             # kovovost
     orm_img = Image.fromarray((orm * 255 + 0.5).astype(np.uint8), "RGB")
     out = {}
@@ -267,6 +272,92 @@ def compact(j, b):
     return nb
 
 
+def skin_maps(size=2048, seed=3):
+    """Mikroreliéf kůže (póry, jemné vrásky) a proměnlivá drsnost – procedurálně, dlaždice přes UV kůže."""
+    rng = np.random.default_rng(seed)
+    h = np.zeros((size, size), np.float32)
+    for k, amp in ((size // 2, 0.5), (size // 4, 0.8), (size // 16, 0.35)):
+        g = rng.random((k, k)).astype(np.float32)
+        h += amp * np.asarray(Image.fromarray((g * 255).astype(np.uint8)).resize((size, size), Image.BICUBIC), np.float32) / 255
+    pores = rng.random((size, size)) < 0.012                       # póry: drobné prohlubně
+    pm = np.asarray(Image.fromarray((pores * 255).astype(np.uint8)).filter(__import__("PIL.ImageFilter", fromlist=["x"]).GaussianBlur(1.2)), np.float32) / 255
+    h -= pm * 1.6
+    gy, gx = np.gradient(h)
+    n = np.dstack([-gx * 0.42, -gy * 0.42, np.ones_like(h)])   # jemné: póry vidět jen zblízka
+    n /= np.linalg.norm(n, axis=2, keepdims=True)
+    nimg = Image.fromarray(((n * 0.5 + 0.5) * 255 + 0.5).astype(np.uint8), "RGB")
+    orm = np.zeros((size, size, 3), np.float32)
+    orm[..., 0] = 1.0 - 0.25 * pm
+    orm[..., 1] = np.clip(0.5 + 0.12 * (h - h.mean()) / (h.std() + 1e-6) * 0.5 + 0.1 * pm, 0.35, 0.75)
+    oimg = Image.fromarray((orm * 255 + 0.5).astype(np.uint8), "RGB")
+    out = {}
+    for key, img in (("normal", nimg), ("orm", oimg)):
+        img.save(OUT / f"skin_{key}.jpg", quality=92)
+        buf = io.BytesIO()
+        img.save(buf, "JPEG", quality=92)
+        out[key] = buf.getvalue()
+    return out
+
+
+def refine(path, maps, skin):
+    """Už upravený model: nové mapy materiálů, realistické barvy kovů a látek (barvy vrcholů), mikroreliéf kůže."""
+    j, b = load_glb(path)
+    mats = j["materials"]
+    tex_img = lambda ti: j["textures"][ti]["source"]
+    def replace_image(ti, data):
+        while len(b) % 4:
+            b.extend(b"\0")
+        off = len(b)
+        b.extend(data)
+        j["bufferViews"].append({"buffer": 0, "byteOffset": off, "byteLength": len(data)})
+        j["images"][tex_img(ti)]["bufferView"] = len(j["bufferViews"]) - 1
+        j["images"][tex_img(ti)]["mimeType"] = "image/jpeg"
+    done = set()
+    for mi, m in enumerate(mats):
+        name = m.get("name", "")
+        kind = name[:-4] if name.endswith(" pbr") else None
+        if kind in maps and mi not in done:
+            pbr = m["pbrMetallicRoughness"]
+            replace_image(pbr["baseColorTexture"]["index"], maps[kind]["basecolor"])
+            replace_image(m["normalTexture"]["index"], maps[kind]["normal"])
+            replace_image(pbr["metallicRoughnessTexture"]["index"], maps[kind]["orm"])
+            done.add(mi)
+        if name == "skin" and "normalTexture" in m:   # už má mikroreliéf: jen nové mapy
+            replace_image(m["normalTexture"]["index"], skin["normal"])
+            replace_image(m["pbrMetallicRoughness"]["metallicRoughnessTexture"]["index"], skin["orm"])
+        elif name == "skin":
+            tn = add_image(j, b, skin["normal"], "image/jpeg", "skin_normal")
+            to = add_image(j, b, skin["orm"], "image/jpeg", "skin_orm")
+            m["normalTexture"] = {"index": tn}
+            pbr = m.setdefault("pbrMetallicRoughness", {})
+            pbr["metallicRoughnessTexture"] = {"index": to}
+            pbr["metallicFactor"], pbr["roughnessFactor"] = 0.0, 1.0
+    # barvy vrcholů: ocel neutrálně šedá (bez modrého nádechu), látky přirozená barviva (méně syté) – jen jednou
+    first = j.setdefault("extras", {}).get("voxario_npc_pbr", 0) < 2
+    j["extras"]["voxario_npc_pbr"] = 2
+    for mesh in (j["meshes"] if first else []):
+        for prim in mesh["primitives"]:
+            name = mats[prim["material"]].get("name", "")
+            if "COLOR_0" not in prim["attributes"] or name not in ("steel pbr", "cloth pbr", "leather pbr"):
+                continue
+            a = j["accessors"][prim["attributes"]["COLOR_0"]]
+            c = read(j, b, prim["attributes"]["COLOR_0"]).astype(np.float32)
+            if a["componentType"] != 5126:
+                c = c / (255.0 if a["componentType"] == 5121 else 65535.0)
+            rgb = c[:, :3]
+            lum = rgb @ np.array([0.299, 0.587, 0.114], np.float32)
+            if name == "steel pbr":
+                L = np.where(lum > 0.45, 0.6 + (lum - 0.45) * 0.3, np.maximum(lum, 0.24) * 1.05)   # leštěná / černěná ocel
+                rgb = np.stack([L * 1.0, L * 0.985, L * 0.965], -1) * 0.88 + rgb * 0.12
+            elif name == "cloth pbr":
+                rgb = (lum[:, None] + (rgb - lum[:, None]) * 0.72) * 0.94
+            else:
+                rgb = (lum[:, None] + (rgb - lum[:, None]) * 0.85)
+            c[:, :3] = np.clip(rgb, 0, 1)
+            prim["attributes"]["COLOR_0"] = write(j, b, c.astype(np.float32), 5126, "VEC4" if c.shape[1] == 4 else "VEC3")
+    save_glb(path, j, compact(j, b))
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--cache", default=os.environ.get("ERYNDOR_TEXTURE_CACHE", str(pathlib.Path.home() / ".cache" / "eryndor-polyhaven")))
@@ -275,8 +366,11 @@ def main():
     maps = {k: build_maps(k, pathlib.Path(a.cache), a.size) for k in KINDS}
     (OUT / "CREDITS.txt").write_text("Materiály brnění a oděvů NPC: fotoskeny Poly Haven (https://polyhaven.com), CC0 1.0.\n"
                                      + "".join(f"{k}: https://polyhaven.com/a/{v[0]}\n" for k, v in KINDS.items()), encoding="utf-8")
+    skin = skin_maps()
     for f in sorted(HUMANS.glob("*.glb")):
-        print(f"{f.name}: {process(f, maps)} dílů")
+        n = process(f, maps)
+        refine(f, maps, skin)
+        print(f"{f.name}: {n} nových dílů, materiály a barvy obnoveny")
 
 
 if __name__ == "__main__":
