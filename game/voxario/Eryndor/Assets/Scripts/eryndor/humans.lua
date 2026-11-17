@@ -5,11 +5,11 @@ local M = {}
 
 M.Items = { sword = "sword_1handed", sword2 = "sword_2handed", shield = "shield_round", shield_badge = "shield_badge_color",
             staff = "staff", wand = "wand", book = "spellbook_open", crossbow = "crossbow_1handed", crossbow2 = "crossbow_2handed",
-            dagger = "dagger", axe = "axe_1handed", axe2 = "axe_2handed" }
+            dagger = "dagger", axe = "axe_1handed", axe2 = "axe_2handed", bow = "bow_long" }
 
 -- realistické verze předmětů (Models/gear/real) – zbytek z KayKitu
 M.Real = { sword_1handed = true, sword_2handed = true, dagger = true, axe_2handed = true, staff = true, shield_round = true,
-           crossbow_1handed = true, spellbook_open = true, wand = true }
+           crossbow_1handed = true, spellbook_open = true, wand = true, bow_long = true, quiver = true }
 
 -- spawn postavy: path = "syl_knight_m" …, opts = {right, left, helm, scale, yaw, name, tag}
 function M.Spawn(path, x, y, z, opts)

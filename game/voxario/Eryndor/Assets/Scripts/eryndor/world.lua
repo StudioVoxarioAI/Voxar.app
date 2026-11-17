@@ -416,6 +416,7 @@ function M.Build()
     M.BuildTerrain()
     local valoria = require("eryndor.valoria")
     valoria.Build()
+    require("eryndor.citizens").Spawn(valoria)   -- obyvatelé Valorie (30 NPC) a kapitán na náměstí
     for _, a in ipairs(valoria.SkybridgeAvoid) do avoid[#avoid + 1] = a end
     M.BuildRoads()
     M.BuildBridges()

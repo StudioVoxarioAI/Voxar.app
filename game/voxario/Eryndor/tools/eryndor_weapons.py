@@ -192,6 +192,46 @@ def spellbook_open():
     return [(merge(*cover), COVER), (merge(*pages), CLOTH), (merge(*brass), BRASS)]
 
 
+def bow_long():
+    """Dlouhý luk: osa Y = délka, tětiva po +X (k lučištníkovi), ramena se k tětivě ohýbají, konce zpětně zahnuté."""
+    wood, leather, metal = [], [], []
+    L = 0.78
+    def cx(y):
+        t = abs(y) / L
+        return 0.15 * t * t - 0.03 * max(0.0, (t - 0.88) / 0.12) ** 2      # ohyb ramene, zpětný zákrut špičky
+    ys = np.linspace(-L, L, 41)
+    for y0, y1 in zip(ys[:-1], ys[1:]):
+        x0, x1 = cx(y0), cx(y1)
+        t = abs((y0 + y1) / 2) / L
+        w = 0.024 * (1 - 0.55 * t) + 0.006
+        th = 0.016 * (1 - 0.45 * t) + 0.005
+        seg = math.hypot(x1 - x0, y1 - y0)
+        ang = math.degrees(math.atan2(x1 - x0, y1 - y0))
+        (leather if abs((y0 + y1) / 2) < 0.08 else wood).append(
+            box(th, seg * 1.02, w).rotate(0, 0, -ang).translate((x0 + x1) / 2, (y0 + y1) / 2, 0))
+    for sgn in (1, -1):   # rohové špičky
+        metal.append(sphere(0.008, 8, 6).translate(cx(sgn * L), sgn * L, 0))
+    string = [box(0.0025, 2 * L - 0.01, 0.0025).translate(cx(L) + 0.004, 0, 0)]
+    return [(merge(*wood), WOOD), (merge(*leather), LEATHER), (merge(*metal), BRASS), (merge(*string), STRING)]
+
+
+def quiver():
+    """Kožený toulec se šípy (na zádech, kost spine_03): osa Y vzhůru, otvor nahoře."""
+    leather = [cylinder(0.055, 0.045, 0.56, 16).translate(0, -0.3, 0), cylinder(0.06, 0.06, 0.03, 16).translate(0, 0.24, 0)]
+    straps = [box(0.02, 0.3, 0.13).translate(0.0, -0.05, 0.0)]
+    shafts, fletch, tips = [], [], []
+    for k in range(9):
+        a = k / 9 * 2 * math.pi
+        x, z = math.cos(a) * 0.03, math.sin(a) * 0.03
+        h = 0.28 + 0.02 * ((k * 7) % 3)
+        shafts.append(cylinder(0.004, 0.004, h, 6).translate(x, 0.0, z))
+        for f in range(3):   # opeření
+            b = a + f * 2.09
+            fletch.append(box(0.002, 0.08, 0.016).rotate(0, math.degrees(b), 0).translate(x + math.cos(b) * 0.008, h - 0.05, z + math.sin(b) * 0.008))
+    return [(merge(*leather), dict(LEATHER, color=(0.36, 0.22, 0.13))), (merge(*straps), LEATHER), (merge(*shafts), WOOD),
+            (merge(*fletch), dict(name="fletching", color=(0.75, 0.2, 0.15), roughness=0.9))]
+
+
 def wand():
     return [(lathe([(0.008, -0.12), (0.011, 0.0), (0.009, 0.2), (0.006, 0.28)], 10, True, True), WOOD),
             (cone(0.012, 0.04, 6).translate(0, 0.28, 0), CRYSTAL)]
@@ -209,6 +249,8 @@ def main():
         "crossbow_1handed": crossbow(),
         "spellbook_open": spellbook_open(),
         "wand": wand(),
+        "bow_long": bow_long(),
+        "quiver": quiver(),
     }
     for name, parts in items.items():
         write_glb(str(OUT / f"{name}.glb"), parts, name=name)

@@ -7,6 +7,7 @@ local player = require("eryndor.player")
 local combat = require("eryndor.combat")
 local hud = require("eryndor.hud")
 local quest = require("eryndor.quest")
+local citizens = require("eryndor.citizens")
 local valoria = require("eryndor.valoria")
 
 local deg, atan, sqrt = math.deg, math.atan, math.sqrt
@@ -509,6 +510,54 @@ function Selftest()
         _G.world.environment({ time_of_day = 12 })
         local riv = map.Data.River[math.floor(#map.Data.River * 0.45)]
         lookFrom(riv[1] + 25, 14, riv[2] - 20, riv[1], 0, riv[2]); timer.sleep(3); shot("w7-reka")
+        game.log("SELFTEST hotovo")
+        game.quit()
+        return
+    end
+    if only == "mesto" then
+        -- obyvatelé Valorie: 30 NPC chodí po ulici a náměstí, povídají si, kapitán na náměstí; cena za snímek
+        timer.wait_until(function() return _G.world.loading() == 0 end)
+        if graphics and graphics.detail_density then graphics.detail_density(0.0) end
+        _G.world.environment({ time_of_day = 15.0 })
+        local Y = valoria.GateY
+        lookFrom(2830, Y + 30, 2440, 2850, Y, 2400)   -- kamera ve městě (NPC daleko od kamery stojí a jsou skrytá)
+        timer.sleep(25)   -- rozejdou se
+        local cz = citizens
+        local bad = 0
+        for _, n in ipairs(cz.list) do
+            local x, y, z = entity.get_position(n.id)
+            if type(x) == "table" then x, y, z = x.x or x[1], x.y or x[2], x.z or x[3] end
+            if n.role ~= "guard" and not cz.Walkable(x, z) then bad = bad + 1 end
+            if math.abs(y - Y) > 0.01 then bad = bad + 1 end
+        end
+        assert(bad == 0, "NPC mimo dlažbu: " .. bad)
+        -- Lua: cena aktualizace 30 NPC
+        local c0 = os.clock()
+        for _ = 1, 300 do citizens.Update(1 / 60, nil, nil) end
+        game.log(string.format("MESTO: citizens.Update %.3f ms / snímek (30 NPC)", (os.clock() - c0) / 300 * 1000))
+        lookFrom(2745, Y + 3.2, 2401, 2860, Y + 1.0, 2400); timer.sleep(1.5); shot("m1-ulice")
+        lookFrom(2925, Y + 9, 2428, 2950, Y + 1, 2398); timer.sleep(1.5); shot("m2-namesti")
+        local c = cz.captain
+        lookFrom(c.x + 1.2, Y + 1.7, c.z + 3.2, c.x, Y + 1.35, c.z); timer.sleep(1.0); shot("m3-kapitan")
+        -- detail rozhovoru a chůze
+        for _, n in ipairs(cz.list) do
+            if n.state == "talk" and n.speaker then
+                local o = n.talk
+                local mx, mz = (n.x + o.x) / 2, (n.z + o.z) / 2
+                local dx, dz = o.z - n.z, -(o.x - n.x)
+                lookFrom(mx + dx * 2.2, Y + 1.6, mz + dz * 2.2, mx, Y + 1.2, mz); timer.sleep(0.8); shot("m4-rozhovor")
+                break
+            end
+        end
+        for _, n in ipairs(cz.list) do
+            if n.state == "walk" and n.v > 0.8 and n.role == "walker" then
+                local hy = math.rad(n.yaw)
+                local sx, sz = math.cos(hy), -math.sin(hy)
+                lookFrom(n.x + sx * 3.0 + math.sin(hy) * 1.5, Y + 1.3, n.z + sz * 3.0 + math.cos(hy) * 1.5, n.x, Y + 1.0, n.z)
+                timer.sleep(0.3); shot("m5-chuze-" .. n.kind)
+                break
+            end
+        end
         game.log("SELFTEST hotovo")
         game.quit()
         return
@@ -1077,7 +1126,12 @@ end
 
 local lastThunder = 0
 function on_update(dt)
-    if game_.built then world.Update(dt) end   -- leviatani na moři (i v samotestu)
+    if game_.built then
+        world.Update(dt)   -- leviatani na moři (i v samotestu)
+        local px, pz
+        if mode == "play" then local x, _, z = player.Pos(); px, pz = x, z end
+        citizens.Update(dt, px, pz)   -- obyvatelé Valorie
+    end
     if mode ~= "play" and mode ~= "select" then return end
     if mode == "select" then creator.Update(dt); return end
     presence.Update(dt)
