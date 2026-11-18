@@ -51,6 +51,7 @@ const groups: Group[] = [
     hint: "Externí služby a katalogy",
     sections: [
       { icon: Gamepad2, title: "Hry", desc: "Katalog her pro server list", to: "/admin/games" },
+      { icon: Gamepad2, title: "Přístupy ke hrám", desc: "Kdo smí v StudioVoxario Connect hrát Ashes of Eryon a Fantasy", to: "/admin/game-access" },
       { icon: MessageCircle, title: "Discord servery", desc: "Spravovat invite odkazy a featured tlačítko", to: "/admin/discord" },
     ],
   },
