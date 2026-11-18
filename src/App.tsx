@@ -69,6 +69,7 @@ import VoxarioBrowser from "./pages/VoxarioBrowser.tsx";
 import GameLauncher from "./pages/GameLauncher.tsx";
 import VoxarioTools from "./pages/AI.tsx";
 import AdminDownloadCodes from "./pages/AdminDownloadCodes.tsx";
+import AdminGameAccess from "./pages/AdminGameAccess.tsx";
 import AdminConsole from "./pages/AdminConsole.tsx";
 import AdminCosmetics from "./pages/AdminCosmetics.tsx";
 import AdminPurchases from "./pages/AdminPurchases.tsx";
@@ -159,6 +160,7 @@ const AppRoutes = () => {
         <Route path="/studio" element={<Navigate to="/studio/demo" replace />} />
         <Route path="/ai" element={<ProtectedRoute requireAdmin><VoxarioTools /></ProtectedRoute>} />
         <Route path="/admin/download-codes" element={<ProtectedRoute requireEditor><AdminDownloadCodes /></ProtectedRoute>} />
+        <Route path="/admin/game-access" element={<ProtectedRoute requireEditor><AdminGameAccess /></ProtectedRoute>} />
         <Route path="/admin/badges" element={<ProtectedRoute requireEditor><AdminBadges /></ProtectedRoute>} />
         <Route path="/admin/nakupy" element={<ProtectedRoute requireEditor><AdminPurchases /></ProtectedRoute>} />
         <Route path="/admin/cosmetics" element={<ProtectedRoute requireEditor><AdminCosmetics /></ProtectedRoute>} />
