@@ -140,13 +140,14 @@ function M.Spawn(a, x, y, z, opts)
     local right, left = opts.right, opts.left
     if gear then right, left = gear.right, gear.left end
     local items = require("eryndor.humans").Dress(id, { right = right, left = left, gearScale = gear and gear.scale })   -- zbraně na handslot
+    local weapons = { table.unpack(items) }
     if gear and gear.armor then   -- zbroj na míru rase, hýbe se s kostrou nositele
         local ar = _G.world.spawn("Models/gear/" .. gear.armor .. "_" .. a.race .. ".glb", x, y, z, { name = gear.armor })
         entity.equip(ar, id)
         items[#items + 1] = ar
     end
     M.Apply(id, a)
-    return id, items
+    return id, items, weapons
 end
 
 -- kompaktní vzhled pro síť (barvy jako hex)

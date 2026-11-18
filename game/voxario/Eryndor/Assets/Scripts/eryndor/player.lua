@@ -4,7 +4,7 @@ local map = require("eryndor.map")
 local humans = require("eryndor.humans")
 local M = { cam = { yaw = 180, pitch = 18, distance = 7.5 }, facing = 180, speed = 0, moving = false,
             inputEnabled = true, runSpeed = 6.2, walkSpeed = 2.0, sprintSpeed = 9.0,
-            swimSpeed = 3.2, swimFast = 5.0, oxygenMax = 30, oxygen = 30 }
+            swimSpeed = 3.2, swimFast = 5.0, oxygenMax = 20, oxygen = 20 }
 -- rychlosti, při kterých pohybové klipy enginu nekloužou (tools/motion/humanoid_motion.py, REF) – při jiné
 -- rychlosti se klip zrychlí / zpomalí; menší rasy (výška) dělají kratší kroky
 M.ClipSpeed = { walk = 1.5, run = 5.0, sprint = 7.5 }
@@ -30,8 +30,8 @@ function M.Create(class, spawn, appearance)
     M.body = _G.world.spawn("cylinder", x, y + 1.0, z, { visible = false, name = "Player", tag = "player",
         character = { radius = 0.35, height = 1.7, step = 0.45, slope = 50 } })
     if appearance then
-        M.view = require("eryndor.races").Spawn(appearance, x, y, z, { name = appearance.name, right = class.look.right,
-            left = class.look.left })
+        M.view, M.items, M.weapons = require("eryndor.races").Spawn(appearance, x, y, z, { name = appearance.name,
+            right = class.look.right, left = class.look.left })
     else
         M.view = humans.Spawn(class.model, x, y, z, { name = class.name, right = class.look.right, left = class.look.left,
             helm = class.look.helm })
@@ -105,6 +105,7 @@ function M.Update(dt, combatPose, moveTo, rooted)
     end
     local mx, mz = fx * iz + rx * ix, fz * iz + rz * ix
     M.manual = (ix ~= 0 or iz ~= 0)
+    if M.emote and (M.manual or (M.inputEnabled and input.pressed("Space"))) then require("eryndor.emotes").StopSelf() end
     local px, py, pz = M.Pos()
     if not M.manual and moveTo then
         local dx, dz = moveTo[1] - px, moveTo[2] - pz
@@ -117,13 +118,14 @@ function M.Update(dt, combatPose, moveTo, rooted)
     local spd = M.runSpeed
     if M.inputEnabled and input.key("Shift") and M.manual then spd = M.sprintSpeed
     elseif M.inputEnabled and input.key("Ctrl") then spd = M.walkSpeed end
+    if M.mount then spd = M.mount.Speed(M.inputEnabled and input.key("Shift") and M.manual, M.inputEnabled and input.key("Ctrl")) end
     if M.UpdateSwim(dt, mx, mz, ml) then return end
     local k = 1 - exp(-14 * dt)
     M.vx = (M.vx or 0) + (mx * spd - (M.vx or 0)) * k
     M.vz = (M.vz or 0) + (mz * spd - (M.vz or 0)) * k
-    local jump = (M.inputEnabled and not M.dead and not M.swim and input.pressed("Space")) and 6.0 or 0
+    local jump = (M.inputEnabled and not M.dead and not M.swim and not M.emote and input.pressed("Space")) and (M.mount and 7.0 or 6.0) or 0
     local grounded = physics.move_character(M.body, M.vx, M.vz, jump)
-    if jump > 0 then M.Action("Jump_Full_Short", 0.9) end
+    if jump > 0 and not M.mount then M.Action("Jump_Full_Short", 0.9) end
     if ml > 0.05 then M.facing = angleLerp(M.facing, deg(atan(mx, mz)), 1 - exp(-12 * dt)) end
     if M.faceTarget and ml < 0.05 then M.facing = angleLerp(M.facing, M.faceTarget, 1 - exp(-10 * dt)) end
     M.speed = sqrt(M.vx * M.vx + M.vz * M.vz)
@@ -149,6 +151,10 @@ function M.Update(dt, combatPose, moveTo, rooted)
         gy = M.viewY + (gy - M.viewY) * (1 - exp(-22 * dt))
     end
     M.viewY = gy
+    if M.mount then   -- na koni: kůň nese jezdce (eryndor.mount)
+        M.mount.Pose(dt, px, gy, pz, M.facing, M.speed)
+        return
+    end
     entity.set_position(M.view, px, gy, pz)
     entity.set_rotation(M.view, 0, M.facing, 0)
     entity.set_position(M.lamp, px, gy + 2.6, pz)
@@ -172,7 +178,7 @@ end
 
 -- ------------------------------------------------------------------ plavání a potápění
 -- Hlubší voda než po hrudník: postava plave (nesahá na dno). U hladiny kraul / šlapání vody, Ctrl (C) ponoří,
--- Space vynoří, pod vodou plave směrem kamery (W s kamerou dolů = dolů). Kyslík: 30 s pod vodou, pak tonutí.
+-- Space vynoří, pod vodou plave směrem kamery (W s kamerou dolů = dolů). Dech: 20 s pod vodou, pak se postava udusí.
 local function waterY(x, z)
     local f = _G.world.water_height
     if not f then return nil end
@@ -264,18 +270,15 @@ function M.UpdateSwim(dt, mx, mz, ml)
     return true
 end
 
--- kyslík: pod vodou ubývá, nad hladinou se rychle doplní; prázdný = tonutí (8 % životů za sekundu)
+-- dech: 20 s, ubývá jen když je celá postava pod hladinou (i hlava); nad hladinou se rychle doplní.
+-- Dojde-li dech, postava se udusí a zemře.
 function M.UpdateOxygen(dt, under)
     M.underwater = under
     if under then
         M.oxygen = math.max(0, M.oxygen - dt)
-        if M.oxygen <= 0 then
-            M.drownT = (M.drownT or 0) + dt
-            if M.drownT >= 1 then
-                M.drownT = M.drownT - 1
-                local c = require("eryndor.combat")
-                if c.me then c.HurtPlayer(c.me.maxhp * 0.08) end
-            end
+        if M.oxygen <= 0 and not M.dead then
+            local c = require("eryndor.combat")
+            if c.me then c.HurtPlayer(c.me.hp + c.me.maxhp, "Došel ti dech – utonul jsi. Ozvěna se vrací ke Zřídlu…") end
         end
     else
         M.oxygen = math.min(M.oxygenMax, M.oxygen + dt * 6)

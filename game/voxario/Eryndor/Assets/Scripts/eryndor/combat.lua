@@ -76,6 +76,27 @@ M.MobTypes = {
     wolf = { name = "Zkažený vlk", model = "Models/fauna/wolf.glb", level = 1, hp = 90, atk = 9, def = 3, range = 1.9, speed = 1.6,
              aggro = 9, run = 6.5, walk = 1.6, xp = 28, anims = { idle = "Idle", walk = "Walk", run = "Run", attack = { "Attack1" }, hit = "Hit", death = "Death" },
              scale = 1.08, lod = true },
+    -- lovná zvěř (Quadruped Forge): klidná, dokud ji hráč nenapadne (aggro 0) – kůže pro Stahování
+    boar = { name = "Divoký kanec", model = "Models/fauna/boar.glb", level = 2, hp = 120, atk = 10, def = 4, range = 1.8, speed = 1.7,
+             aggro = 0, run = 5.5, walk = 1.0, xp = 30, scale = 1.0, lod = true, hunt = true,
+             anims = { idle = "Graze", walk = "Walk", run = "Run", attack = { "Attack" }, hit = "Hit", death = "Death" } },
+    stag = { name = "Jelen", model = "Models/fauna/stag.glb", level = 3, hp = 150, atk = 12, def = 5, range = 2.2, speed = 1.8,
+             aggro = 0, run = 7.0, walk = 1.25, xp = 40, scale = 1.0, lod = true, hunt = true,
+             anims = { idle = "Graze", walk = "Walk", run = "Run", attack = { "Attack" }, hit = "Hit", death = "Death" } },
+    bear = { name = "Hnědý medvěd", model = "Models/fauna/bear.glb", level = 5, hp = 520, atk = 24, def = 12, range = 2.4, speed = 2.2,
+             aggro = 6, run = 6.0, walk = 1.15, xp = 160, scale = 1.0, lod = true, hunt = true, aggroTime = 1.6,
+             anims = { idle = "Idle", walk = "Walk", run = "Run", attack = { "Attack" }, hit = "Hit", death = "Death", aggro = "Roar" } },
+    -- bossové světové události „Pád z nebes“ (eryndor.events): obří postavy s křídly, nepřijdou o místo (bez leash)
+    angel = { name = "Padlý anděl Seraphiel", human = "lyrise", level = 10, hp = 5200, atk = 38, def = 20, range = 3.6, speed = 1.9,
+              aggro = 18, run = 5.0, walk = 1.6, xp = 2400, elite = true, scale = 2.4, labelY = 5.6, look = { right = "sword2" },
+              leash = 80, attackTime = 1.0, hitDelay = 0.5,
+              light = { color = { 1.0, 0.9, 0.6 }, intensity = 18, range = 16, flicker = false },
+              anims = { idle = "2H_Melee_Idle", walk = "Walking_A", run = "Running_A", attack = { "2H_Melee_Attack_Chop", "2H_Melee_Attack_Slice", "2H_Melee_Attack_Spin" }, hit = "Hit_A", death = "Death_A" } },
+    demon = { name = "Démon Azgaroth", human = "crusher", level = 10, hp = 5800, atk = 42, def = 18, range = 3.8, speed = 2.1,
+              aggro = 18, run = 5.0, walk = 1.4, xp = 2400, elite = true, scale = 2.3, labelY = 5.4, look = { right = "axe2" },
+              leash = 80, attackTime = 1.1, hitDelay = 0.55,
+              light = { color = { 1.0, 0.35, 0.08 }, intensity = 18, range = 16, flicker = true },
+              anims = { idle = "2H_Melee_Idle", walk = "Walking_A", run = "Running_B", attack = { "2H_Melee_Attack_Chop", "2H_Melee_Attack_Spin" }, hit = "Hit_B", death = "Death_B" } },
     cultist = { name = "Kultista Prázdnoty", human = "cultist_m", level = 3, hp = 150, atk = 13, def = 6, range = 2.0, speed = 1.7,
                 aggro = 11, run = 5.2, walk = 1.5, xp = 55, look = { right = "dagger", left = "dagger" },
                 anims = { idle = "Idle", walk = "Walking_A", run = "Running_A", attack = { "Dualwield_Melee_Attack_Chop", "Dualwield_Melee_Attack_Slice", "Dualwield_Melee_Attack_Stab" }, hit = "Hit_A", death = "Death_A" } },
@@ -202,6 +223,7 @@ local function spawnMob(kind, x, z)
     return m
 end
 
+M.SpawnMob = spawnMob
 function M.SpawnAll()
     for _, s in ipairs(SPAWNS) do spawnMob(s[1], s[2], s[3]) end
 end
@@ -247,11 +269,33 @@ local function damageMob(m, mult, magic, skill)
         M.Log(m.t.name .. " padl.", { 1.0, 0.8, 0.5 })
         gainXp(m.t.xp)
         if M.onKill then M.onKill(m) end
+        for _, fn in ipairs(M.killHooks or {}) do fn(m) end
         if M.target == m then M.target, M.auto = nil, false end
     elseif random() < 0.35 then
         anim.layer(m.id, m.t.anims.hit, m.t.hitBone or "spine", 0.06, false)
     end
 end
+
+M.DamageMob = damageMob
+-- poškození od mazlíčka / prostředí: pevné číslo, nepřítel se otočí na hráče
+function M.HitMob(m, dmg, color)
+    if m.state == "dead" then return end
+    local x, y, z = pos(m.id)
+    m.hp = m.hp - dmg
+    float(x, y + 2.0, z, tostring(dmg), color or { 0.85, 0.85, 1.0 }, 20)
+    if m.state ~= "return" then m.state = "chase"; m.aggro = true end
+    if m.hp <= 0 then
+        m.hp = 0
+        m.state = "dead"
+        m.deadT = game.time()
+        mobPlay(m, m.t.anims.death, false, true)
+        M.Log(m.t.name .. " padl.", { 1.0, 0.8, 0.5 })
+        gainXp(m.t.xp)
+        for _, fn in ipairs(M.killHooks or {}) do fn(m) end
+        if M.target == m then M.target, M.auto = nil, false end
+    end
+end
+M.GainXp = function(a) gainXp(a) end
 
 local function damagePlayer(m)
     local s = M.me
@@ -571,8 +615,13 @@ function M.UpdateMob(m, dt, now, px, pz)
     local t = m.t
     if m.state == "dead" then
         if m.light and now - m.deadT > 1.2 then entity.set_visible(m.light, false) end   -- žár po smrti vyhasne
-        if now - m.deadT > 22 then   -- respawn na původním místě
-            m.x, m.z, m.hp, m.state, m.aggro = m.hx, m.hz, m.maxhp, "idle", false
+        if m.noRespawn then
+            if now - m.deadT > 30 and not m.gone then m.gone = true; entity.set_visible(m.id, false) end
+            return
+        end
+        local keep = (require("eryndor.professions").Skins[m.kind] and not m.skinned) and 60 or 22   -- mrtvola ke stažení
+        if now - m.deadT > keep then   -- respawn na původním místě
+            m.x, m.z, m.hp, m.state, m.aggro, m.skinned = m.hx, m.hz, m.maxhp, "idle", false, nil
             if m.light then entity.set_visible(m.light, true); entity.set_position(m.light, m.x, M.MobY(m) + 0.6, m.z) end
             entity.set_position(m.id, m.x, M.MobY(m), m.z)
             mobPlay(m, t.anims.idle, true, true)
@@ -605,7 +654,7 @@ function M.UpdateMob(m, dt, now, px, pz)
             if l > 0.4 then moveX, moveZ, spd = dx / l, dz / l, t.walk end
         end
     elseif m.state == "chase" then
-        if player.dead or home > 28 then
+        if player.dead or home > (t.leash or 28) then
             m.state = "return"     -- leash: zpět na místo, mezitím nezranitelný a doplní život
         elseif d > t.range then
             moveX, moveZ, spd = (px - m.x) / d, (pz - m.z) / d, t.run
