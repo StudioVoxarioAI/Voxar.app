@@ -432,6 +432,8 @@ function M.Build()
     M.BuildGrass()
     -- zvěř v lesích: laně s jelenem, divočáci, vlci, medvědi (každé zvíře vlastní trasou)
     require("eryndor.wildlife").Spawn({ scatter = scatter, free = free })
+    -- profese: doly s rudnými žilami, byliny, lovná zvěř
+    require("eryndor.professions").Build(scatter)
 end
 
 return M

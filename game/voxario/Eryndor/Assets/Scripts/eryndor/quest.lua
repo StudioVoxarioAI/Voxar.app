@@ -73,6 +73,15 @@ function M.Talk()
     local close = function() M.dialog = nil end
     if M.NearCaptain() then   -- hlavní kapitán Valorie: bude zadávat úkoly (zatím jen přivítání)
         local cap = require("eryndor.citizens").captain
+        local mount = require("eryndor.mount")
+        if not mount.Has() then
+            M.dialog = { who = cap.name, text =
+                "Ozvěno, cesty Aethelgardu jsou dlouhé a pěšky je nezvládneš. Ze stájí městské stráže ti dávám Hnědáka – " ..
+                "nejrychlejšího koně, kterého máme. Pískni na něj (klávesa H) a ponese tě kamkoli po souši. " ..
+                "Jen do vody s ním nelez a v boji z něj seskoč.",
+                options = { { label = "Přijmout koně", fn = function() mount.Give(); close() end }, { label = "Později", fn = close } } }
+            return
+        end
         M.dialog = { who = cap.name, text =
             "Vítej na náměstí Valorie, Ozvěno. Velím městské stráži a brzy pro tebe budu mít práci – " ..
             "hlídky hlásí neklid za mostem i v přístavu. Vrať se za mnou, až budou rozkazy připravené.",

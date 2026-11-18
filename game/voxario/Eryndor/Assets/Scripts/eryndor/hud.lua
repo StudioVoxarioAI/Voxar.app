@@ -122,12 +122,12 @@ function M.DrawGame()
         ui.panel("UI/hud/frame_thin.png", x - 12, y - 10, w + 24, 40, 10, 14)
         ui.rect(x, y, w, 20, "#0a0806e8", 3)
         if f > 0 then ui.rect(x + 1, y + 1, (w - 2) * f, 18, f > 0.25 and "#4ab8ff" or "#ff6a4a", 3) end
-        for i = 0, 9 do
+        for i = 0, 9 do   -- bublinky: každá = 2 s dechu
             local cx = x + 15 + i * 30
             if (i + 0.5) / 10 <= f then ui.circle(cx, y + 10, 6, "#e8f6ff", false, 1.5) end
         end
         ui.font("small")
-        ui.text(x + w / 2, y - 2, f > 0 and string.format("Kyslík %d s", math.ceil(player.oxygen)) or "Topíš se!",
+        ui.text(x + w / 2, y - 2, f > 0 and string.format("Dech %d s", math.ceil(player.oxygen)) or "Dusíš se!",
             { align = "center", color = "#ffffff", shadow = true })
         ui.pop_font()
     end
@@ -273,6 +273,7 @@ function M.DrawMinimap()
     local val = require("eryndor.valoria")
     local marks = { { val.CityPortal, "#6fd8ff" }, { val.OutpostPortal, "#6fd8ff" }, { map.Lyrise, "#9fc8ff" },
                     { q.Aerin, "#ffd890" } }
+    for _, e in ipairs(M.ExtraMarks()) do marks[#marks + 1] = { e, e.color } end
     for _, m in ipairs(marks) do
         if m[1] then
             local dx, dz = (m[1].x - px) / (span * map.Size) * 2 * r, (m[1].z - pz) / (span * map.Size) * 2 * r
@@ -298,6 +299,20 @@ function M.DrawMinimap()
         ui.text(x + 52, y + 42, line, { color = TEXT, shadow = true, wrap = w - 64 })
         ui.pop_font()
     end
+end
+
+-- další značky: doly (profese), kůň u kapitána Roderika (dokud ho nemáš), místo pádu z nebes (událost)
+function M.ExtraMarks()
+    local out = {}
+    for _, m in ipairs(require("eryndor.professions").mines or {}) do
+        out[#out + 1] = { x = m.x, z = m.z, label = m.name, color = "#e8c27a" }
+    end
+    local mount = require("eryndor.mount")
+    local cap = require("eryndor.citizens").captain
+    if cap and not mount.Has() then out[#out + 1] = { x = cap.x, z = cap.z, label = "Kůň – Kapitán Roderik", color = "#ffb050" } end
+    local ev = require("eryndor.events").marker
+    if ev then out[#out + 1] = { x = ev.x, z = ev.z, label = ev.label, color = ev.color, big = true } end
+    return out
 end
 
 -- velká mapa celého světa (klávesa M)
@@ -358,6 +373,14 @@ function M.DrawWorldMap()
         ui.text(lx + 8, ly - 10, p[2], { color = TEXT, shadow = true })
     end
     ui.pop_font()
+    for _, e in ipairs(M.ExtraMarks()) do
+        local lx, ly = at(e.x, e.z)
+        local r = e.big and (7 + 2 * math.sin(game.time() * 5)) or 5
+        ui.rect(lx - r, ly - r, 2 * r, 2 * r, e.color, r)
+        ui.rect(lx - r, ly - r, 2 * r, 2 * r, "#10141c", r)
+        ui.rect(lx - r + 2, ly - r + 2, 2 * r - 4, 2 * r - 4, e.color, r)
+        ui.text(lx + r + 4, ly - 10, e.label, { color = e.color, shadow = true })
+    end
     -- Abyssal Leviathan (živé polohy)
     local ok, world = pcall(require, "eryndor.world")
     if ok and world.Leviathans then

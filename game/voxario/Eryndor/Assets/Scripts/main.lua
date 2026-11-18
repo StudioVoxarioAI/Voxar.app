@@ -47,6 +47,353 @@ function Selftest()
         timer.sleep(wait or 2.5)
         shot(name)
     end
+    if only == "ikony" then
+        -- fotorealistické ikony předmětů: studio nad mořem (tmavé pozadí, slunce za kamerou + měkké doplňkové světlo),
+        -- každý předmět vyfotí engine (PBR, srst, odlesky); ořez a rám: tools/eryndor_item_icons.py --from-shots
+        _G.world.environment({ time_of_day = 12, fog = 0.00001, haze = 0, mist = false, clouds = 0, exposure = 0.85 })
+        _G.world.weather({ rain = 0, snow = 0, storm = 0, wind = 0, instant = true })
+        if graphics and graphics.detail_density then graphics.detail_density(0) end
+        timer.sleep(1)
+        local ox, oy, oz = -3600, 300, -3600
+        local studio = _G.world.spawn("Models/icons/studio.glb", ox, oy, oz, { name = "studio" })
+        local L = { { 1.6, 1.8, 2.0, { 1.0, 0.93, 0.85 }, 9, 7 }, { -2.2, 0.6, 1.2, { 0.75, 0.82, 1.0 }, 3, 7 },
+                    { 0.4, 1.6, -2.0, { 1.0, 0.95, 0.85 }, 8, 6 } }   -- hlavní, doplňkové, kontra
+        local lights = {}
+        for _, l in ipairs(L) do
+            lights[#lights + 1] = _G.world.spawn("light", ox + l[1], oy + l[2], oz + l[3], { light = { color = l[4], intensity = l[5], range = l[6] } })
+        end
+        local camD = 1.55
+        lookFrom(ox, oy + 0.42, oz + camD, ox, oy, oz)
+        local yaw0 = 0
+        -- {ikona, model, fit (výška), náklon X, otočení Y (vůči kameře), Z, posun Y}
+        local items = { { "wolf_pet", "Models/fauna/wolf.glb", 0.62, 8, 125, 0, -0.33 } }
+        for _, n in ipairs({ "pickaxe", "knife", "rod", "herb_mirumilka", "herb_stribrolist", "herb_krvavy_trn",
+                             "herb_mesicni_lilie", "herb_ledovy_kvet", "ore_silver", "ore_gold", "ore_diamond", "ore_mithril",
+                             "hide_wolf", "hide_boar", "hide_stag", "hide_bear", "scale_dragon", "fish_pstruh", "fish_okoun",
+                             "fish_losos", "fish_stika", "fish_ohnivy", "fish_kapr", "horse", "feather_angel", "horn_demon",
+                             "meteor_shard" }) do
+            local rx, ry, rz = 18, 30, 0
+            if n:find("^fish") then rx, ry, rz = 8, 0, -14 end
+            if n:find("^hide") or n == "scale_dragon" then rx, ry, rz = 62, 0, 0 end
+            if n == "horse" then rx, ry = 70, 0 end
+            if n == "feather_angel" or n == "knife" or n == "rod" then rx, ry, rz = 10, 20, -42 end
+            if n == "pickaxe" then rx, ry, rz = 10, 15, -35 end
+            if n:find("^herb") then rx, ry, rz = 14, 20, 0 end
+            items[#items + 1] = { n, "Models/icons/" .. n .. ".glb", nil, rx, ry, rz, 0 }
+        end
+        local pick = game.env and game.env("VOXARIO_IKONY")
+        for _, it in ipairs(items) do
+            if not pick or pick:find(it[1], 1, true) then
+                local id = _G.world.spawn(it[2], ox, oy + it[7], oz, { fit = it[3], name = it[1] })
+                entity.set_rotation(id, it[4], yaw0 + it[5], it[6])
+                if it[1] == "wolf_pet" then anim.play(id, "Idle_Look", 0, true) end
+                timer.wait_until(function() return _G.world.loading() == 0 end)
+                timer.sleep(1.2)
+                local p = entity.get_position(id)
+                game.log(string.format("ikona %s @ %.2f %.2f %.2f", it[1], p.x or p[1], p.y or p[2], p.z or p[3]))
+                shot("icon-" .. it[1])
+                entity.destroy(id)
+            end
+        end
+        entity.destroy(studio)
+        for _, l in ipairs(lights) do entity.destroy(l) end
+        game.log("SELFTEST hotovo")
+        game.quit()
+        return
+    end
+    if only == "profese" or only == "svet" then
+        -- nové herní systémy (profese, doly, rybolov, kůň, vlk, emoty, ústa / svět: pád z nebes, okna, sníh, stíny, mraky)
+        local prof = require("eryndor.professions")
+        local inv = require("eryndor.inventory")
+        local mnt = require("eryndor.mount")
+        local petm = require("eryndor.pet")
+        local emo = require("eryndor.emotes")
+        local vc = require("eryndor.voice")
+        local ev = require("eryndor.events")
+        local pick = game.env and game.env("VOXARIO_CAST")
+        local function want(n) return not pick or pick:find(n, 1, true) ~= nil end
+        _G.world.environment({ time_of_day = 14.5 })
+        game_.EnterWorld(1)
+        game_.noWeather = true
+        timer.sleep(1)
+        local function behind(dist, height, side)
+            -- kamera za a nad hráčem (pohled na postavu)
+            local x, y, z = player.Pos()
+            local f = math.rad(player.facing + (side or 0))
+            lookFrom(x - math.sin(f) * dist, (player.viewY or y) + height, z - math.cos(f) * dist, x, (player.viewY or y) + 1.0, z)
+        end
+        game_.freeCam = true
+        if only == "profese" then
+            game.log(string.format("doly: %d, uzly: %d", #prof.mines, #prof.nodes))
+            for i, m in ipairs(prof.mines) do game.log(string.format("důl %s @ %.0f %.0f", m.name, m.x, m.z)) end
+            -- 1) důl a těžba
+            if want("dul") and prof.mines[1] then
+                local m = prof.mines[1]
+                local n
+                for _, nd in ipairs(prof.nodes) do
+                    if nd.kind == "ore" and (nd.x - m.x) ^ 2 + (nd.z - m.z) ^ 2 < 30 * 30 and nd.def.req <= 1 then n = nd; break end
+                end
+                player.Teleport(m.x, m.z)
+                timer.sleep(2); timer.wait_until(function() return _G.world.loading() == 0 end); timer.sleep(1.5)
+                local mx, my, mz = player.Pos(prof.mines[1].id)
+                lookFrom(m.x + (m.x - mx) * 1.2, G(m.x, m.z) + 9, m.z + (m.z - mz) * 1.2, mx, my + 2, mz)
+                timer.sleep(2); shot("p1-dul")
+                if n then
+                    local dx, dz = n.x - m.x, n.z - m.z
+                    local l = math.sqrt(dx * dx + dz * dz)
+                    player.Teleport(n.x - dx / l * 1.8, n.z - dz / l * 1.8)
+                    player.facing = math.deg(math.atan(dx, dz))
+                    timer.sleep(1.5)
+                    prof.Interact()
+                    timer.sleep(1.3); behind(4.5, 2.2, 50); timer.sleep(0.3); shot("p2-tezba")
+                    timer.sleep(2.5)
+                    game.log("stříbrná ruda v tašce: " .. inv.Count("ore_silver") .. ", hornictví " .. prof.skill.mining)
+                end
+            end
+            -- 2) byliny u základny
+            if want("bylin") then
+                local h
+                local S = map.Start
+                for _, nd in ipairs(prof.nodes) do
+                    if nd.kind == "herb" and (nd.x - S.x) ^ 2 + (nd.z - S.z) ^ 2 < 120 * 120 then h = nd; break end
+                end
+                if h then
+                    player.Teleport(h.x + 1.0, h.z + 0.4)
+                    timer.sleep(2)
+                    lookFrom(h.x + 2.2, G(h.x, h.z) + 1.2, h.z + 1.6, h.x, G(h.x, h.z) + 0.3, h.z); timer.sleep(1.5); shot("p3-kvetina")
+                    prof.Interact()
+                    timer.sleep(0.8); behind(4, 2, 60); timer.sleep(0.2); shot("p4-trhani")
+                    timer.sleep(1.6)
+                    game.log("mírumilka: " .. inv.Count("herb_mirumilka") .. ", bylinkářství " .. prof.skill.herbalism)
+                end
+            end
+            -- 3) stahování kance
+            if want("kuze") then
+                local S = map.Start
+                local px, pz = S.x + 30, S.z + 20
+                player.Teleport(px, pz)
+                local m = combat.SpawnMob("boar", px + 2.5, pz + 1)
+                timer.sleep(1.5)
+                combat.HitMob(m, 9999)
+                timer.sleep(2.5)
+                player.facing = math.deg(math.atan(m.x - px, m.z - pz))
+                prof.Interact()
+                timer.sleep(1.0); behind(4, 2.2, 70); timer.sleep(0.2); shot("p5-stahovani")
+                timer.sleep(2.0)
+                game.log("kančí kůže: " .. inv.Count("hide_boar") .. ", stahování " .. prof.skill.skinning)
+            end
+            -- 4) rybolov u řeky Serpentine
+            if want("ryby") then
+                local R = map.Data.River
+                local done = false
+                for i = math.floor(#R * 0.4), #R - 1 do
+                    local rx, rz = R[i][1] or R[i].x, R[i][2] or R[i].z
+                    local nx, nz = (R[i + 1][1] or R[i + 1].x) - rx, (R[i + 1][2] or R[i + 1].z) - rz
+                    local l = math.sqrt(nx * nx + nz * nz) + 1e-6
+                    if G(rx, rz) < map.SeaY - 1 then
+                        for d = 2, 80, 1 do   -- od středu řeky ven: první suché místo = břeh
+                            local x, z = rx + (-nz / l) * d, rz + (nx / l) * d
+                            if G(x, z) > map.SeaY + 0.4 then
+                                if G(x, z) < map.SeaY + 5 then
+                                    x, z = rx + (-nz / l) * (d + 1.5), rz + (nx / l) * (d + 1.5)
+                                    player.Teleport(x, z)
+                                    player.cam.yaw = math.deg(math.atan(rx - x, rz - z))
+                                    player.facing = player.cam.yaw
+                                    done = true
+                                end
+                                break
+                            end
+                        end
+                    end
+                    if done then break end
+                end
+                game.log("rybolov: břeh nalezen = " .. tostring(done))
+                timer.sleep(2)
+                prof.StartFishing()
+                timer.sleep(2.0)
+                if prof.fishing then
+                    behind(5, 2.5, 35); timer.sleep(0.3); shot("p6-rybareni")
+                    prof.fishing.bite = game.time()
+                    timer.sleep(0.4); shot("p7-zaber")
+                    prof.Hook()
+                end
+                timer.sleep(1)
+                local fish = 0
+                for _, f in ipairs(prof.Fish) do fish = fish + inv.Count(f.item) end
+                game.log("ryby v tašce: " .. fish .. ", rybolov " .. prof.skill.fishing)
+            end
+            -- 5) kůň, vlk, emoty, ústa
+            local S = map.Start
+            if want("kun") then
+                player.Teleport(S.x + 20, S.z - 30)
+                timer.sleep(1)
+                mnt.Give()
+                mnt.Mount()
+                timer.sleep(2); behind(6, 2.4, 70); timer.sleep(0.3); shot("p8-kun")
+                combat.moveTo = nil
+                local x0, _, z0 = player.Pos()
+                timer.every(0, function() if mnt.riding then player.vx, player.vz = 0, 0 end end)
+                -- jízda: přesun kapsle po cestě (bez vstupu z klávesnice)
+                for i = 1, 40 do
+                    entity.set_position(player.body, x0 + i * 0.35, G(x0 + i * 0.35, z0) + 1.0, z0)
+                    player.Update(0.05, false, nil, false)
+                    timer.sleep(0.03)
+                end
+                player.speed = 11
+                mnt.Pose(0.05, x0 + 14, G(x0 + 14, z0), z0, 90, 11)
+                behind(7, 2.6, 80); timer.sleep(0.4); shot("p9-cval")
+                mnt.Dismount()
+                timer.sleep(1)
+            end
+            if want("vlk") then
+                player.Teleport(S.x + 26, S.z - 40)
+                timer.sleep(2.5)
+                behind(6, 2.4, 40); timer.sleep(0.5); shot("p10-vlk-mazlicek")
+                local x, _, z = player.Pos()
+                local w = combat.SpawnMob("wolf", x + 6, z + 2)
+                w.state, w.aggro = "chase", true
+                timer.sleep(2.0); behind(7, 3, 20); timer.sleep(0.2); shot("p11-vlk-brani")
+                timer.sleep(3)
+                game.log("vlk nepřítele: " .. w.state .. " hp " .. w.hp)
+            end
+            if want("emot") then
+                player.Teleport(S.x + 10, S.z - 20)
+                timer.sleep(1.5)
+                emo.Play("dance")
+                for i = 1, 3 do timer.sleep(0.45); behind(3.6, 1.6, 180 - 30); timer.sleep(0.05); shot("p12-tanec-" .. i) end
+                emo.StopSelf(); timer.sleep(0.5)
+                emo.Play("wave"); timer.sleep(1.0); behind(3.6, 1.6, 150); shot("p13-mavani")
+                timer.sleep(2); emo.Play("bow"); timer.sleep(0.9); behind(3.6, 1.6, 100); shot("p14-uklona")
+                timer.sleep(2); emo.Play("sit"); timer.sleep(2.5); behind(3.6, 1.6, 150); shot("p15-sed")
+                emo.StopSelf(); timer.sleep(1)
+            end
+            if want("usta") then
+                player.Teleport(S.x + 10, S.z - 20)
+                timer.sleep(1.2)
+                local x, y, z = player.Pos()
+                local hp = entity.bone_position(player.view, "head")
+                local hy = hp and (hp.y or hp[2]) or (y + 0.8)
+                local f = math.rad(player.facing)
+                lookFrom(x + math.sin(f) * 0.75, hy + 0.05, z + math.cos(f) * 0.75, x, hy - 0.02, z)
+                for _, sh in ipairs({ "X0", "A9", "O8", "E8", "U7", "M1", "I8", "F5", "S6" }) do
+                    vc.Queue(player.view, string.rep(sh, 12), game.time())
+                    timer.sleep(0.16)
+                    shot("p16-usta-" .. sh:sub(1, 1))
+                end
+            end
+            game.log("taška: " .. inv.Count("pickaxe") .. " krumpáč, " .. inv.Count("rod") .. " prut")
+        else
+            -- svět: pád z nebes, okna v noci, sníh, stíny, mraky
+            local S = map.Start
+            if want("event") then
+                player.Teleport(S.x + 10, S.z - 10)
+                timer.sleep(2)
+                local x, _, z = player.Pos()
+                ev.Trigger("demon", x + 70, z + 50, 6)
+                lookFrom(x - 20, G(x, z) + 6, z - 20, x + 70, G(x, z) + 120, z + 50)
+                timer.sleep(3.0); shot("w1-meteor-pada")
+                timer.sleep(2.6); lookFrom(x - 25, G(x, z) + 10, z - 25, x + 70, G(x + 70, z + 50) + 3, z + 50); shot("w2-dopad")
+                timer.sleep(1.5); shot("w3-krater")
+                timer.sleep(3.5)
+                lookFrom(x + 58, G(x + 58, z + 38) + 4, z + 38, x + 70, G(x + 70, z + 50) + 4, z + 50); timer.sleep(0.5); shot("w4-demon")
+                if ev.boss then
+                    local bx, by, bz = player.Pos(ev.boss.id)
+                    lookFrom(bx - 9, by + 4, bz - 9, bx, by + 3, bz); timer.sleep(0.6); shot("w4b-demon-zblizka")
+                    lookFrom(bx + 9, by + 4, bz + 9, bx, by + 3, bz); timer.sleep(0.4); shot("w4c-demon-zezadu")
+                end
+                ev.Clear()
+                ev.Trigger("angel", x + 70, z + 50, 4)
+                timer.sleep(8.5)
+                lookFrom(x + 58, G(x + 58, z + 38) + 4, z + 38, x + 70, G(x + 70, z + 50) + 4, z + 50); timer.sleep(0.5); shot("w5-andel")
+                if ev.boss then
+                    local bx, by, bz = player.Pos(ev.boss.id)
+                    lookFrom(bx - 9, by + 4, bz - 9, bx, by + 3, bz); timer.sleep(0.6); shot("w5b-andel-zblizka")
+                    lookFrom(bx + 9, by + 4, bz + 9, bx, by + 3, bz); timer.sleep(0.4); shot("w5c-andel-zezadu")
+                end
+                ev.Clear()
+            end
+            if want("okna") then
+                local c = require("eryndor.citizens").captain
+                local cy = require("eryndor.citizens").Y or 2
+                player.Teleport(c.x + 3, c.z + 3)
+                _G.world.environment({ time_of_day = 22.5 })
+                for i, a in ipairs({ 0, 120, 240 }) do
+                    local r = math.rad(a)
+                    lookFrom(c.x + math.sin(r) * 4, cy + 4, c.z + math.cos(r) * 4, c.x - math.sin(r) * 40, cy + 6, c.z - math.cos(r) * 40)
+                    timer.sleep(3); shot("w6-okna-noc-" .. i)
+                end
+                _G.world.environment({ time_of_day = 14.5 })
+                timer.sleep(1)
+                lookFrom(c.x + 0, cy + 4, c.z + 4, c.x, cy + 6, c.z - 40); timer.sleep(3); shot("w8-mesto-den")
+            end
+            if want("stiny") then
+                _G.world.environment({ time_of_day = 16.8 })
+                local c = require("eryndor.citizens").captain
+                if c then lookFrom(c.x + 6, (require("eryndor.citizens").Y or 2) + 3, c.z + 7, c.x, (require("eryndor.citizens").Y or 2) + 1, c.z) end
+                timer.sleep(3); shot("w9-stiny-postav")
+                player.Teleport(S.x + 30, S.z + 30)
+                timer.sleep(2); behind(6, 3, 40); timer.sleep(0.5); shot("w10-stin-hrace")
+            end
+            if want("snih") then
+                _G.world.environment({ time_of_day = 12 })
+                local fr = map.Data.Regions.frost
+                player.Teleport(fr.x + 40, fr.z + 40)
+                timer.sleep(1)
+                weatherCycleForTest()
+                timer.sleep(6); behind(7, 2.5, 30); timer.sleep(0.5); shot("w11-snih")
+            end
+            if want("mraky") then
+                _G.world.environment({ time_of_day = 11, clouds = 0.45 })
+                _G.world.weather({ rain = 0, storm = 0, snow = 0, instant = true })
+                player.Teleport(S.x, S.z)
+                timer.sleep(2)
+                lookFrom(S.x, G(S.x, S.z) + 3, S.z, S.x + 200, G(S.x, S.z) + 120, S.z - 150); timer.sleep(3); shot("w12-mraky-jasno")
+                _G.world.environment({ clouds = 1.0 })
+                _G.world.weather({ rain = 1, storm = 1, wind = 0.9, instant = true })
+                timer.sleep(4); shot("w13-mraky-bourka")
+                lookFrom(S.x - 30, G(S.x, S.z) + 12, S.z - 30, S.x, G(S.x, S.z), S.z); timer.sleep(1); shot("w14-bourka-zem")
+            end
+        end
+        game.log("SELFTEST hotovo")
+        game.quit()
+        return
+    end
+    if only == "osy" then
+        game_.EnterWorld(1)
+        game_.noWeather = true
+        game_.freeCam = true
+        local S = map.Start
+        player.Teleport(S.x + 10, S.z - 20)
+        timer.sleep(2)
+        for _, w in ipairs(player.weapons or {}) do entity.set_visible(w, false) end
+        player.actionT = game.time() + 999
+        anim.play(player.view, "Idle", 0, true)
+        local x, y, z = player.Pos()
+        local f = math.rad(player.facing)
+        local hp = entity.bone_position(player.view, "head")
+        local hy = hp and (hp.y or hp[2]) or (y + 0.8)
+        for _, b in ipairs({ { "upperarm_l", 70 }, { "spine_01", 30 }, { "thigh_l", 40 } }) do
+            for ai, ax in ipairs({ "x", "y", "z" }) do
+                local r = { 0, 0, 0 }; r[ai] = b[2]
+                entity.bone_rotate(player.view, b[1], r[1], r[2], r[3])
+                lookFrom(x + math.sin(f) * 3.2, (player.viewY or y) + 1.2, z + math.cos(f) * 3.2, x, (player.viewY or y) + 0.9, z)
+                timer.sleep(0.4); shot("o-" .. b[1] .. "-" .. ax)
+                entity.bone_rotate(player.view, b[1])
+            end
+        end
+        for ai, ax in ipairs({ "x", "y", "z" }) do
+            for _, sgn in ipairs({ 1, -1 }) do
+                local r = { 0, 0, 0 }; r[ai] = 22 * sgn
+                entity.bone_rotate(player.view, "jaw", r[1], r[2], r[3])
+                lookFrom(x + math.sin(f) * 0.7, hy + 0.0, z + math.cos(f) * 0.7, x, hy - 0.05, z)
+                timer.sleep(0.4); shot("o-jaw-" .. ax .. (sgn > 0 and "p" or "m"))
+                entity.bone_rotate(player.view, "jaw")
+            end
+        end
+        game.log("SELFTEST hotovo")
+        game.quit()
+        return
+    end
     if only == "krajina" then
         -- tráva (world.grass), fotorealistické stromy, cesty a voda (engine ≥ 1.22)
         _G.world.environment({ time_of_day = 10.5 })
@@ -947,6 +1294,13 @@ local presence = require("eryndor.presence")
 local widgets = require("eryndor.widgets")
 local menu = require("eryndor.menu")
 local addons = require("eryndor.addons")
+local inventory = require("eryndor.inventory")
+local professions = require("eryndor.professions")
+local mount = require("eryndor.mount")
+local pet = require("eryndor.pet")
+local emotes = require("eryndor.emotes")
+local voice = require("eryndor.voice")
+local events = require("eryndor.events")
 local mode = "select"
 game_.Creator = creator
 
@@ -965,9 +1319,18 @@ local function enterWorld()
     local rname = require("eryndor.races").Defs[a.race].name
     combat.Log("Vítej ve Valorii, " .. a.name .. " (" .. rname .. ", " .. c.name .. "). Portál tě zavede k Lyrise.", { 0.8, 0.9, 1.0 })
     combat.Log("Tab cíl · R útok · 1–5 dovednosti · Shift sprint · Ctrl chůze · F mluvit · M mapa · pravé tlačítko kamera", { 0.7, 0.7, 0.7 })
+    combat.Log("E těžit / trhat / stahovat / rybařit · B taška · P profese · G emoty · H kůň · K vlk · V mluvit", { 0.7, 0.7, 0.7 })
+    inventory.Load()
+    professions.Load()
+    pet.Load()
     mode = "play"
     game_.mode = mode
     presence.Start(a)
+    emotes.onPlay = function(e) presence.Send("emote", { e = e or false }) end
+    mount.onChange = function(on) presence.Send("mount", { on = on }) end
+    inventory.Actions.fish = function() professions.StartFishing() end
+    inventory.Actions.mount = function() mount.Toggle() end
+    inventory.Actions.pet = function() pet.Toggle() end
 end
 game_.EnterWorld = function(i)
     if not creator.a then creator.Load() end
@@ -981,6 +1344,12 @@ game_.Preview = function(i)
 end
 -- (samotest) zpět před vstup: hráč, nepřátelé a Lyrise pryč
 game_.Reset = function()
+    mount.Dismount(true)
+    pet.Dismiss(true)
+    events.Clear()
+    professions.StopFishing()
+    professions.cast = nil
+    professions.ReleaseTool()
     for _, m in ipairs(combat.mobs) do entity.destroy(m.id); if m.light then entity.destroy(m.light) end end
     combat.mobs, combat.target, combat.auto, combat.floats = {}, nil, false, {}
     if player.view then entity.destroy(player.view); entity.destroy(player.body); entity.destroy(player.lamp) end
@@ -993,6 +1362,7 @@ end
 local nextWeather = 0
 local lastRegion
 local function weatherCycle()
+    if game_.noWeather then return end
     -- ve Frostfang Peaks sněží, v Ignis Scar je sucho (popel), jinde se počasí střídá
     local px, _, pz = player.Pos()
     local region = map.Region(px, pz)
@@ -1007,11 +1377,14 @@ local function weatherCycle()
     if game.time() < nextWeather then return end
     nextWeather = game.time() + 150 + math.random() * 150
     local r = math.random()
-    if r < 0.45 then _G.world.weather({ rain = 0, storm = 0, wind = 0.25 })
+    -- jasno s kupami, oblačno, déšť, bouřka (engine ≥ 1.31: objemové mraky; v bouřce černé, zakryjí slunce i stíny)
+    if r < 0.45 then _G.world.weather({ rain = 0, storm = 0, wind = 0.25 }); _G.world.environment({ clouds = 0.35 + math.random() * 0.15 })
     elseif r < 0.7 then _G.world.weather({ rain = 0, storm = 0, wind = 0.55 }); _G.world.environment({ clouds = 0.75 })
-    elseif r < 0.9 then _G.world.weather({ rain = 0.8, storm = 0, wind = 0.5 })
-    else _G.world.weather({ rain = 1, storm = 1, wind = 0.9 }) end
+    elseif r < 0.9 then _G.world.weather({ rain = 0.8, storm = 0, wind = 0.5 }); _G.world.environment({ clouds = 0.85 })
+    else _G.world.weather({ rain = 1, storm = 1, wind = 0.9 }); _G.world.environment({ clouds = 1.0 }) end
 end
+
+function weatherCycleForTest() lastRegion = nil; game_.noWeather = false; weatherCycle(); game_.noWeather = true end
 
 -- streaming: modely nepřátel v okolí (250 m) se načtou dopředu na pozadí – bez záseků při příchodu do oblasti
 local preloadAt, preloaded = 0, {}
@@ -1053,6 +1426,7 @@ end)
 
 -- akce ESC menu a mikro lišty
 local function logout()
+    voice.Shutdown()
     presence.Stop()
     game_.Reset()
     talentui.open, options.open, addons.open, game_.mapOpen = false, false, false, false
@@ -1165,13 +1539,30 @@ function on_update(dt)
         local overlay = talentui.open or options.open or menu.open or addons.open
         if not overlay then
             if input.pressed("Tab") then combat.TabTarget() end
-            if input.pressed("R") then combat.StartAttack() end
-            actionbar.HandleKeys()            -- 1–0, -, = : dovednosti, aktivní talenty, lektvary, útok, cíl
+            if input.pressed("R") then mount.Dismount(); emotes.StopSelf(); combat.StartAttack() end
+            if not emotes.HandleKeys() then
+                if mount.riding then
+                    for k = 1, 9 do if input.pressed(tostring(k)) then mount.Dismount() end end
+                end
+                actionbar.HandleKeys()            -- 1–0, -, = : dovednosti, aktivní talenty, lektvary, útok, cíl
+            end
+            if input.pressed("E") then
+                if not professions.Hook() then mount.Dismount(); professions.Interact() end
+            end
+            if input.pressed("B") then inventory.Toggle() end
+            if input.pressed("P") then professions.Toggle() end
+            if input.pressed("G") then emotes.Toggle() end
+            if input.pressed("H") then emotes.StopSelf(); mount.Toggle() end
+            if input.pressed("K") then pet.Toggle() end
         end
         if input.pressed("N") then talentui.Toggle() end
         if input.pressed("O") then options.Toggle() end
         if input.pressed("Escape") then
             if menu.open then menu.Toggle()
+            elseif emotes.open then emotes.open = false
+            elseif inventory.open then inventory.open = false
+            elseif professions.open then professions.open = false
+            elseif professions.fishing then professions.StopFishing("Stáhl jsi udici.")
             elseif addons.open then addons.open = false
             elseif talentui.open then talentui.open = false
             elseif options.open then options.open = false
@@ -1195,6 +1586,12 @@ function on_update(dt)
     end
     addons.Fire("update", dt)
     combat.Update(dt)
+    professions.Update(dt)
+    mount.Update(dt)
+    pet.Update(dt)
+    emotes.Update(dt)
+    voice.Update(dt, function(chunk) presence.Send("voice", { c = chunk }) end)
+    events.Update(dt)
     player.Update(dt, combat.inCombat, combat.moveTo, combat.me and combat.me.casting ~= nil)
     if not game_.freeCam then player.UpdateCamera(dt) end
     weatherCycle()
@@ -1228,7 +1625,9 @@ function on_gui()
     if mode ~= "play" then return end
     if not ui.wants_mouse() and not talentui.open and not options.open and not menu.open and not addons.open
         and not widgets.MouseOverUI() then
-        if input.pressed("Mouse1") then
+        if input.pressed("Mouse1") and professions.fishing and professions.fishing.phase == "bite" then
+            professions.Hook()
+        elseif input.pressed("Mouse1") then
             local m = pick()
             if m then combat.Select(m) end
         end
@@ -1259,12 +1658,21 @@ function on_gui()
         end
     end
     presence.DrawLabels()
+    professions.DrawLabels()
+    mount.DrawLabels()
+    pet.DrawLabel()
+    events.DrawHud()
     hud.DrawGame()
+    professions.DrawHud()
+    voice.DrawHud()
     hud.DrawQuest(quest.Tracker())
     hud.DrawDialog(quest.dialog)
     if game_.mapOpen then hud.DrawWorldMap() else hud.DrawMinimap() end
     addons.Fire("draw")
     microBar()
+    inventory.Draw(widgets)
+    professions.Draw(widgets)
+    emotes.Draw(widgets)
     talentui.Draw()
     options.Draw()
     addons.Draw(widgets)

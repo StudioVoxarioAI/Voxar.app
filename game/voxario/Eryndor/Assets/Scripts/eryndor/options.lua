@@ -178,10 +178,32 @@ function M.Draw()
                 if c2 then s.hud_log = t2; changed = true end
                 ui.end_tab()
             end
+            if ui.tab("Zvuk a hlas") then
+                local vc = require("eryndor.voice")
+                local vs = vc.Settings()
+                local vch = false
+                local en, c1 = ui.checkbox("Hlasový chat (mikrofon)", vs.enabled)
+                if c1 then vs.enabled = en; vch = true end
+                if vs.enabled then
+                    ui.label("Mluvení", DIM)
+                    ui.item_width(-1)
+                    local mi, c2 = ui.combo("##voice_mode", vs.mode == "open" and 2 or 1, { "Při držení klávesy V", "Otevřený mikrofon (stále)" })
+                    if c2 then vs.mode = mi == 2 and "open" or "ptt"; vch = true end
+                    ui.label("Hlasitost ostatních hráčů", DIM)
+                    ui.item_width(-1)
+                    local v, c3 = ui.slider("##voice_vol", vs.volume, 0.0, 2.0, "%.2f")
+                    if c3 then vs.volume = v; vch = true end
+                    ui.label(vc.device and ("Mikrofon: " .. vc.device) or "Mikrofon se zapne při prvním mluvení.", DIM)
+                    if vc.mic then ui.progress(math.min(1, (vc.level or 0) * 3), -1, 14, "") end
+                end
+                if vch then vc.SaveSettings(vs) end
+                ui.end_tab()
+            end
             if ui.tab("Ovládání") then
                 ui.text_wrapped("WASD pohyb · Shift sprint · Ctrl chůze · Space skok · pravé tlačítko kamera · kolečko přiblížení\n" ..
                     "1–8 dovednosti a aktivní talenty · 9 / 0 lektvary · - automatický útok (R) · = další cíl (Tab)\n" ..
-                    "N strom talentů · M mapa světa · J sledování úkolů · F mluvit · Esc menu / zrušit cíl", TEXT)
+                    "N strom talentů · M mapa světa · J sledování úkolů · F mluvit · Esc menu / zrušit cíl\n" ..
+                    "E těžit / trhat / stahovat / rybařit · B taška · P profese · G emoty · H kůň · K vlk · V hlasový chat", TEXT)
                 ui.end_tab()
             end
             ui.end_tabs()
