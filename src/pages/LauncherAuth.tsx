@@ -30,8 +30,8 @@ const APPS: Record<string, AppInfo> = {
     ask: "Přihlásit launcher Ashes of Eryon?",
     sees: "Launcher uvidí tvé jméno a bude moct spustit hru pod tvým účtem.",
     back: "launcheru",
-    download: "/desktop#ashes",
-    downloadLabel: "Stáhnout launcher",
+    download: "/desktop",
+    downloadLabel: "Stáhnout StudioVoxario Connect",
   },
   studio: {
     name: "Voxario Studio Engine",

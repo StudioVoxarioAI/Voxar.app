@@ -46,6 +46,26 @@ export const planPrice = (item: ShopItem, period: Period) =>
   period === "year" && item.price_year_czk ? item.price_year_czk : item.price_czk;
 
 /** Data pro platební dialog u předplatného nebo licence. */
+/** Software, který se instaluje přes StudioVoxario Connect (katalog Connectu) – web nenabízí jeho instalátor. */
+const CONNECT_PRODUCTS = new Set(["voxario-studio-engine"]);
+const viaConnect = (item: ShopItem) => !!item.product_key && CONNECT_PRODUCTS.has(item.product_key);
+
+function ConnectInstall({ item }: { item: ShopItem }) {
+  return (
+    <div className="space-y-2">
+      <Button className="w-full" asChild>
+        <a href={`studiovoxario://library/${item.product_key}`}>
+          <Download className="h-4 w-4 mr-2" /> Instalovat ve StudioVoxario Connect
+        </a>
+      </Button>
+      <p className="text-xs text-muted-foreground text-center">
+        Instalace a aktualizace probíhají v aplikaci StudioVoxario Connect (licence se ověří u účtu).{" "}
+        <a href="/desktop" className="text-primary hover:underline">Stáhnout Connect</a>
+      </p>
+    </div>
+  );
+}
+
 export function subscriptionCheckout(item: ShopItem, plan: BuyPlan) {
   if (isLicensePlan(plan.period)) {
     const p = plan.period;
@@ -287,7 +307,9 @@ export function SoftwareTab({
                 </div>
               )}
 
-              {active ? (
+              {active && viaConnect(item) ? (
+                <ConnectInstall item={item} />
+              ) : active ? (
                 <>
                   <Button className="w-full" disabled={busy || !item.file_parts?.length} onClick={() => download(item)}>
                     {busy ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
@@ -490,7 +512,9 @@ function LicenseCard({
                   : `Aktualizace skončily ${fmtDate(license.updates_until)} – program funguje dál, nové verze odemkne Upgrade pass.`}
               </p>
             </div>
-            {license.can_download ? (
+            {license.can_download && viaConnect(item) ? (
+              <ConnectInstall item={item} />
+            ) : license.can_download ? (
               <>
                 <Button className="w-full" disabled={busy || !item.file_parts?.length} onClick={onDownload}>
                   {busy ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
