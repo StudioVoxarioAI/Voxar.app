@@ -864,7 +864,7 @@ export default function AshesGame() {
                 {L("Snížit grafiku", "Lower graphics")}
               </button>
             )}
-            {!isDesktop() && <Link className="ash-btn ghost small" to="/download">{L("Stáhnout launcher", "Download the launcher")}</Link>}
+            {!isDesktop() && <Link className="ash-btn ghost small" to="/desktop">{L("Stáhnout StudioVoxario Connect", "Download StudioVoxario Connect")}</Link>}
             <button
               className="ash-btn ghost small"
               onClick={() => {

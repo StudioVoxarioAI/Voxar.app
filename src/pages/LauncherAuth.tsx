@@ -17,13 +17,21 @@ const B64URL = /^[A-Za-z0-9_-]{16,128}$/;
 
 type AppInfo = { name: string; ask: string; sees: string; back: string; download: string; downloadLabel: string };
 const APPS: Record<string, AppInfo> = {
+  connect: {
+    name: "StudioVoxario Connect",
+    ask: "Přihlásit StudioVoxario Connect?",
+    sees: "Connect uvidí tvé jméno, knihovnu, přístupy a licence a bude moct spouštět hry pod tvým účtem.",
+    back: "Connectu",
+    download: "/desktop",
+    downloadLabel: "Stáhnout StudioVoxario Connect",
+  },
   ashes: {
     name: "launcher Ashes of Eryon",
     ask: "Přihlásit launcher Ashes of Eryon?",
     sees: "Launcher uvidí tvé jméno a bude moct spustit hru pod tvým účtem.",
     back: "launcheru",
-    download: "/desktop#ashes",
-    downloadLabel: "Stáhnout launcher",
+    download: "/desktop",
+    downloadLabel: "Stáhnout StudioVoxario Connect",
   },
   studio: {
     name: "Voxario Studio Engine",

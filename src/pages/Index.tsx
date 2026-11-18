@@ -188,7 +188,7 @@ const Index = () => {
                     </Link>
                   )}
                   <Link to="/desktop" className="web-btn inline-flex h-12 items-center justify-center gap-2 px-6">
-                    <Download className="h-4 w-4" /> Stáhnout pro Windows
+                    <Download className="h-4 w-4" /> Stáhnout StudioVoxario Connect
                   </Link>
                   {discord && (
                     <a href={discord.invite_url} target="_blank" rel="noreferrer" className="web-btn inline-flex h-12 items-center justify-center gap-2 px-6">

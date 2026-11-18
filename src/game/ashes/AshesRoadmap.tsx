@@ -319,8 +319,8 @@ export default function AshesRoadmap() {
             </button>
           )}
           <button className="ash-icon-btn lang" onClick={() => setLang(lang === "cs" ? "en" : "cs")}>{lang === "cs" ? "EN" : "CZ"}</button>
-          <Link to="/desktop#ashes" className="ash-btn ghost small">{L("Stáhnout", "Download")}</Link>
-          <Link to="/desktop#ashes" className="ash-btn small">{L("Stáhnout hru", "Download")}</Link>
+          <Link to="/desktop" className="ash-btn ghost small">{L("Stáhnout Connect", "Get Connect")}</Link>
+          <Link to="/desktop" className="ash-btn small">{L("Hrát přes Connect", "Play via Connect")}</Link>
         </div>
       </header>
 

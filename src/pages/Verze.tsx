@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { PageHero } from "@/components/PageHero";
 import { SEO } from "@/components/SEO";
 import { CHANGELOG, type ChangelogType } from "@/data/changelog";
+import { useConnectChangelog } from "@/hooks/useConnectChangelog";
 import { History, Rocket, Sparkles, Wrench, ShieldCheck, Monitor, Globe, CheckCircle2 } from "lucide-react";
 
 const TYPE_META: Record<ChangelogType, { icon: typeof Sparkles; cs: string; en: string; className: string }> = {
@@ -27,7 +28,8 @@ const norm = (v: string) => v.replace(/^v/i, "").split("-")[0];
 const Verze = () => {
   const { i18n } = useTranslation();
   const cs = i18n.language === "cs";
-  const [module, setModule] = useState<"app" | "browser">("app");
+  const [module, setModule] = useState<"connect" | "app" | "browser">("connect");
+  const { data: connectLog = [], isLoading: connectLoading } = useConnectChangelog();
   const [installed, setInstalled] = useState<HistoryRow[]>([]);
   const [current, setCurrent] = useState<string | null>(null);
 
@@ -89,7 +91,14 @@ const Verze = () => {
           {cs ? "Zobrazit celý changelog" : "View the full changelog"}
         </Link>
 
-        <div className="flex gap-2 my-6">
+        <div className="flex flex-wrap gap-2 my-6">
+          <Button
+            variant={module === "connect" ? "default" : "outline"}
+            onClick={() => setModule("connect")}
+            className="gap-2"
+          >
+            <Rocket className="w-4 h-4" /> StudioVoxario Connect
+          </Button>
           <Button
             variant={module === "app" ? "default" : "outline"}
             onClick={() => setModule("app")}
@@ -107,7 +116,11 @@ const Verze = () => {
         </div>
 
         <p className="text-sm text-muted-foreground mb-4">
-          {module === "app"
+          {module === "connect"
+            ? cs
+              ? "Platforma StudioVoxario Connect – poznámky ke každé vydané verzi. Connect se aktualizuje sám."
+              : "StudioVoxario Connect platform – notes for every released version. Connect updates itself."
+            : module === "app"
             ? cs
               ? "Voxar.app se aktualizuje automaticky při spuštění i za běhu."
               : "Voxar.app updates automatically on launch and while running."
@@ -117,8 +130,9 @@ const Verze = () => {
         </p>
 
         <div className="space-y-5">
-          {CHANGELOG.map((entry) => {
-            const inst = installedMap.get(norm(entry.version));
+          {module === "connect" && connectLoading && <p className="text-sm text-muted-foreground">{cs ? "Načítám vydání…" : "Loading releases…"}</p>}
+          {(module === "connect" ? connectLog : CHANGELOG).map((entry) => {
+            const inst = module === "connect" ? undefined : installedMap.get(norm(entry.version));
             return (
               <Card key={entry.version} className="p-5 holo-panel">
                 <div className="flex flex-wrap items-center gap-3 mb-3">
@@ -130,7 +144,7 @@ const Verze = () => {
                       {cs ? "Nainstalováno" : "Installed"} {fmt(inst.installedAt)}
                     </Badge>
                   )}
-                  {current && norm(current) === norm(entry.version) && (
+                  {module !== "connect" && current && norm(current) === norm(entry.version) && (
                     <Badge variant="secondary">{cs ? "Aktuální" : "Current"}</Badge>
                   )}
                 </div>

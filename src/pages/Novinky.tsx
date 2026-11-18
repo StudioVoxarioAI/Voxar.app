@@ -11,7 +11,8 @@ import {
 import { CalendarDays, Search, Sparkles, Wrench, ShieldCheck, Rocket, Newspaper } from "lucide-react";
 import { PageHero } from "@/components/PageHero";
 import { SEO } from "@/components/SEO";
-import { CHANGELOG, type ChangelogType } from "@/data/changelog";
+import { CHANGELOG, type ChangelogEntry, type ChangelogType } from "@/data/changelog";
+import { useConnectChangelog } from "@/hooks/useConnectChangelog";
 
 const TYPE_META: Record<ChangelogType, { icon: typeof Sparkles; cs: string; en: string; className: string }> = {
   feature: { icon: Rocket, cs: "Novinka", en: "Feature", className: "bg-primary/15 text-primary border-primary/40" },
@@ -31,25 +32,32 @@ const Novinky = () => {
       day: "numeric", month: "long", year: "numeric",
     });
 
+  // platforma (StudioVoxario Connect, živě z vydání) + dosavadní historie Voxar.app, od nejnovějšího
+  const { data: connect = [] } = useConnectChangelog();
+  const all = useMemo(() => [
+    ...connect.map((e) => ({ ...e, product: "StudioVoxario Connect" })),
+    ...CHANGELOG.map((e: ChangelogEntry) => ({ ...e, product: "Voxar.app" })),
+  ].sort((a, b) => b.date.localeCompare(a.date)), [connect]);
+
   const entries = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return CHANGELOG.map((e) => {
+    return all.map((e) => {
       const changes = e.changes.filter((c) => {
         if (type !== "all" && c.type !== type) return false;
         if (!q) return true;
-        const hay = `${e.version} ${e.title} ${e.titleEn ?? ""} ${c.text} ${c.textEn ?? ""}`.toLowerCase();
+        const hay = `${e.product} ${e.version} ${e.title} ${e.titleEn ?? ""} ${c.text} ${c.textEn ?? ""}`.toLowerCase();
         return hay.includes(q);
       });
       return { ...e, changes };
     }).filter((e) => e.changes.length > 0);
-  }, [search, type]);
+  }, [search, type, all]);
 
-  const totalChanges = CHANGELOG.reduce((n, e) => n + e.changes.length, 0);
+  const totalChanges = all.reduce((n, e) => n + e.changes.length, 0);
 
-  const title = cs ? "Changelog aplikace" : "Application changelog";
+  const title = cs ? "Novinky a changelog" : "News and changelog";
   const desc = cs
-    ? "Přehled všech úprav, oprav a novinek ve StudioVoxario webu i desktop aplikaci Voxar.app."
-    : "All updates, fixes and new features in the StudioVoxario web and Voxar.app desktop client.";
+    ? "Skutečné poznámky ke každé verzi platformy StudioVoxario Connect a historie Voxar.app."
+    : "Real release notes for every StudioVoxario Connect version and the Voxar.app history.";
 
   return (
     <div className="min-h-screen relative">
@@ -80,8 +88,8 @@ const Novinky = () => {
               <br />
               <span className="text-foreground/70">
                 {cs
-                  ? `${CHANGELOG.length} verzí · ${totalChanges} záznamů`
-                  : `${CHANGELOG.length} versions · ${totalChanges} entries`}
+                  ? `${all.length} verzí · ${totalChanges} záznamů`
+                  : `${all.length} versions · ${totalChanges} entries`}
               </span>
             </>
           }
@@ -128,8 +136,9 @@ const Novinky = () => {
         ) : (
           <div className="space-y-6">
             {entries.map((e) => (
-              <Card key={e.version} className="glass border-border p-5">
+              <Card key={`${e.product}-${e.version}`} className="glass border-border p-5">
                 <div className="flex flex-wrap items-baseline gap-3 mb-4">
+                  <span className={`text-[11px] uppercase tracking-[0.18em] ${e.product === "Voxar.app" ? "text-muted-foreground" : "text-primary"}`}>{e.product}</span>
                   <h2 className="font-display font-black text-2xl text-glow">{e.version}</h2>
                   <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                     <CalendarDays className="h-3 w-3" />
