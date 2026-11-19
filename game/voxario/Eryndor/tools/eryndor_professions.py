@@ -339,6 +339,16 @@ def meteor():
                                                 (floor, dict(name="scorched", color=(1, 1, 1), roughness=1.0))], name="crater")
 
 
+def loot_bag():
+    """Kožený vak s kořistí (zbroj na zemi): baňatý vak, převázané hrdlo, mosazná přezka."""
+    bag = lathe([(0.0, 0.0), (0.16, 0.02), (0.21, 0.1), (0.2, 0.2), (0.13, 0.28), (0.06, 0.31), (0.07, 0.36), (0.1, 0.4), (0.0, 0.41)], 24, False, False)
+    displace(bag, 0.018, 7, 21)
+    tie = lathe([(0.065, 0.3), (0.07, 0.32), (0.065, 0.335)], 16, False, False)
+    buckle = box(0.05, 0.04, 0.012).translate(0, 0.2, 0.205)
+    write_glb(os.path.join(OUT, "loot_bag.glb"), [(bag, LEATHER), (tie, dict(LEATHER, name="tie", color=(0.25, 0.14, 0.07))),
+                                                   (buckle, BRASS)], name="loot_bag")
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
     ore("silver", 11, rgb("#5f5d5a"), dict(name="silver ore", color=(0.93, 0.92, 0.9), metallic=0.8, roughness=0.38), "metal")
@@ -350,6 +360,7 @@ def main():
     for args, kw in FLOWERS:
         flower(*args, **kw)
     pickaxe()
+    loot_bag()
     fishing_rod()
     saddle()
     mine_entrance()

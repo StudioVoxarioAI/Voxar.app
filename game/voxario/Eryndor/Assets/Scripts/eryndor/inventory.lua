@@ -43,7 +43,10 @@ function M.Load()
     if type(saved) == "table" then
         for i = 1, M.size do
             local s = saved[i] or saved[tostring(i)]
-            if type(s) == "table" and M.Items[s.id] then M.slots[i] = { id = s.id, n = s.n or 1 } end
+            if type(s) == "table" and M.Items[s.id] then M.slots[i] = { id = s.id, n = s.n or 1 }
+            elseif type(s) == "table" and type(s.g) == "table" and require("eryndor.items").Base[s.id] then
+                M.slots[i] = { id = s.id, n = 1, g = s.g }   -- výbava (vlastnosti, vzácnost, vylepšení)
+            end
         end
     end
     -- výchozí nástroje (i do starších uložení)
@@ -57,7 +60,7 @@ function M.Save()
     local out = {}
     for i = 1, M.size do
         local s = M.slots[i]
-        out[i] = s and { id = s.id, n = s.n } or false
+        out[i] = s and { id = s.id, n = s.n, g = s.g } or false
     end
     settings.set(KEY, out)
 end
@@ -105,6 +108,24 @@ function M.Add(id, n, quiet)
     return added
 end
 
+-- výbava do prvního volného místa (nikdy se neskládá)
+function M.PutGear(item)
+    for i = 1, M.size do
+        if not M.slots[i] then
+            M.slots[i] = item
+            M.Save()
+            M.flash = { id = item.id, t = game.time() }
+            return true
+        end
+    end
+    return false
+end
+function M.Free()
+    local n = 0
+    for i = 1, M.size do if not M.slots[i] then n = n + 1 end end
+    return n
+end
+
 function M.Remove(id, n)
     n = n or 1
     for i = M.size, 1, -1 do
@@ -128,6 +149,34 @@ function M.Use(id)
     if fn then fn() end
 end
 
+-- popisek výbavy (taška i okno postavy): jméno v barvě vzácnosti, slot, úroveň předmětu, vlastnosti, vylepšení
+function M.GearTooltip(it, x, y, compare)
+    local items = require("eryndor.items")
+    local b = items.Base[it.id]
+    local st = items.Stats(it)
+    local lines = {}
+    local NAMES = { atk = "Útok", def = "Obrana", matk = "Magická síla", hp = "Životy", crit = "Kritický zásah %" }
+    for _, k in ipairs({ "atk", "matk", "def", "hp", "crit" }) do
+        if st[k] then lines[#lines + 1] = { "+" .. st[k] .. " " .. NAMES[k], "#e8f0ff" } end
+    end
+    local slotName = items.SlotNames[b.slot] or ""
+    local kind = b.armor and (b.armor == "plate" and "Plát" or "Kůže") or (b.kind and ({ twohand = "Obouruční", staff = "Obouruční",
+        bow = "Obouruční", shield = "Štít", book = "Vedlejší ruka" })[b.kind] or "Jednoruční")
+    local h = 112 + #lines * 24 + (compare and 26 or 0)
+    local w = 340
+    x = math.max(10, x)
+    ui.rect(x, y, w, h, "#0b0d12f2", 6)
+    ui.rect(x, y, w, 2, items.Color(it), 0)
+    ui.font("body"); ui.text(x + 12, y + 8, items.Name(it), { color = items.Color(it), shadow = true }); ui.pop_font()
+    ui.font("small")
+    ui.text(x + 12, y + 38, items.Rarity[it.g.r].name .. " · " .. slotName .. " · " .. kind, { color = "#9a8f7c" })
+    ui.text(x + w - 12, y + 38, "Úroveň předmětu " .. (it.g.il or 1), { color = "#d8b25a", align = "right" })
+    for i, l in ipairs(lines) do ui.text(x + 12, y + 60 + (i - 1) * 24, l[1], { color = l[2] }) end
+    ui.text(x + 12, y + 66 + #lines * 24, "Vylepšení +" .. (it.g.enh or 0) .. " / +" .. items.MaxEnhancement, { color = "#ffe08a" })
+    if compare then ui.text(x + 12, y + 92 + #lines * 24, "Pravé tlačítko: vybavit", { color = "#7fd36b" }) end
+    ui.pop_font()
+end
+
 -- ------------------------------------------------------------------ okno tašky
 local GOLD, TEXT, DIM = "#d8b25a", "#efe6d2", "#9a8f7c"
 function M.Draw(widgets)
@@ -148,7 +197,20 @@ function M.Draw(widgets)
         local sx, sy = x + 24 + c * (s + gap), y + 56 + r * (s + gap)
         ui.draw_image("UI/hud/slot.png", sx, sy, s, s)
         local it = M.slots[i]
-        if it then
+        if it and it.g then   -- výbava: ikona, rámeček v barvě vzácnosti, +vylepšení
+            local items = require("eryndor.items")
+            local b = items.Base[it.id]
+            ui.draw_image("UI/icons/i_" .. b.icon .. ".png", sx + 4, sy + 4, s - 8, s - 8)
+            ui.rect(sx + 3, sy + 3, s - 6, 2, items.Color(it), 0); ui.rect(sx + 3, sy + s - 5, s - 6, 2, items.Color(it), 0)
+            if (it.g.enh or 0) > 0 then
+                ui.font("small"); ui.text(sx + 7, sy + 5, "+" .. it.g.enh, { color = "#ffe08a", shadow = true }); ui.pop_font()
+            end
+            if mx >= sx and mx < sx + s and my >= sy and my < sy + s then
+                hover = { gear = it, x = sx, y = sy }
+                ui.rect(sx, sy, s, s, "#ffffff22", 4)
+                if input.pressed("Mouse2") then require("eryndor.equipment").Equip(i) end
+            end
+        elseif it then
             local def = M.Items[it.id]
             ui.draw_image("UI/icons/i_" .. def.icon .. ".png", sx + 4, sy + 4, s - 8, s - 8)
             if it.n > 1 then
@@ -167,7 +229,9 @@ function M.Draw(widgets)
     ui.font("small")
     ui.text(x + w / 2, y + h - 34, "[B] zavřít · pravé tlačítko = použít", { align = "center", color = DIM, shadow = true })
     ui.pop_font()
-    if hover then
+    if hover and hover.gear then
+        M.GearTooltip(hover.gear, hover.x - 352, hover.y, true)
+    elseif hover then
         local tw = 300
         local tx, ty = hover.x - tw - 12, hover.y
         ui.rect(tx, ty, tw, 76, "#0b0d12ee", 6)

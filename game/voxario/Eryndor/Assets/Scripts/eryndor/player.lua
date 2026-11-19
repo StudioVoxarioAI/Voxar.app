@@ -30,8 +30,12 @@ function M.Create(class, spawn, appearance)
     M.body = _G.world.spawn("cylinder", x, y + 1.0, z, { visible = false, name = "Player", tag = "player",
         character = { radius = 0.35, height = 1.7, step = 0.45, slope = 50 } })
     if appearance then
-        M.view, M.items, M.weapons = require("eryndor.races").Spawn(appearance, x, y, z, { name = appearance.name,
-            right = class.look.right, left = class.look.left })
+        -- bez výbavy: jen základní oděv rasy (zbroj a zbraně nasadí eryndor.equipment podle vybavení)
+        local bare = {}
+        for k, v in pairs(appearance) do bare[k] = v end
+        bare.gear = false
+        M.view, M.items = require("eryndor.races").Spawn(bare, x, y, z, { name = appearance.name })
+        M.weapons = {}
     else
         M.view = humans.Spawn(class.model, x, y, z, { name = class.name, right = class.look.right, left = class.look.left,
             helm = class.look.helm })
@@ -53,13 +57,14 @@ function M.Teleport(x, z)
     if M.cam then M.cam.x, M.cam.y, M.cam.z = nil, nil, nil end   -- kamera skočí s hráčem (bez dlouhého dojezdu)
 end
 
--- animace pohybu (útoky a kouzla hrají jako jednorázové přes M.Action); s holí varianta „_Staff“
-local STAFF = { Idle = true, ["2H_Melee_Idle"] = true, Walking_A = true, Walking_Backwards = true, Running_A = true,
+-- animace pohybu (útoky a kouzla hrají jako jednorázové přes M.Action). Sada podle zbraně v ruce
+-- (Motion Forge weapon_sets.py): _1H, _1HS, _2H, _DW, _ST, _BOW – mimo boj zasunuté zbraně = volné ruce.
+M.LocoClips = { Idle = true, ["2H_Melee_Idle"] = true, Walking_A = true, Walking_Backwards = true, Running_A = true,
                 Running_B = true, Running_Strafe_Left = true, Running_Strafe_Right = true }
-function M.Clip(clip, class, appearance)
-    class = class or M.class
-    local w = require("eryndor.races").Weapon(appearance or M.appearance, class)
-    if (w == "staff" or w == "gear/hul") and STAFF[clip] then return clip .. "_Staff" end
+function M.Clip(clip, set)
+    if type(set) ~= "string" then set = nil end   -- starší volání (povolání, vzhled) – náhled tvorby postavy je bez zbraní
+    set = set or require("eryndor.equipment").ClipSet()
+    if set ~= "" and M.LocoClips[clip] then return clip .. set end
     return clip
 end
 function M.Play(clip, fade, loop)
@@ -71,6 +76,7 @@ end
 
 -- jednorázová akce (útok, kouzlo, zásah): po dohrání se vrátí k pohybu
 function M.Action(clip, dur, speed)
+    clip = require("eryndor.equipment").MapClip(clip)   -- útok podle zbraně v ruce (pěsti, 1H, 2H, dvě zbraně, střelba)
     M.actionT = game.time() + (dur or 0.8)
     M.anim = clip
     anim.play(M.view, clip, 0.08, false, true)

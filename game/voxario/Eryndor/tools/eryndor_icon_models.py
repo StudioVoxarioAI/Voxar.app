@@ -311,3 +311,89 @@ def studio():
 
 if __name__ == "__main__" and "--studio" in sys.argv:
     studio()
+
+
+# ------------------------------------------------------------------ výbava (zbraně a zbroj) pro ikony
+def gear_icons():
+    """Zbraně (eryndor_weapons) a kusy zbroje Armor Forge (klidová póza člověka) jako vystředěné statické modely
+    Models/icons/g_<předmět>.glb – zbroj sdílí textury Models/armor/tex (odkaz ../armor/tex)."""
+    import json as _json
+    import struct as _struct
+    import eryndor_weapons as ew
+    W = {"g_sword_1h": ew.sword(0.74, 0.048, 0.2, 0.13, 0.024), "g_axe_1h": ew.axe_1handed(), "g_mace_1h": ew.mace_1handed(),
+         "g_dagger": ew.dagger(), "g_sword_2h": ew.sword(1.02, 0.056, 0.3, 0.26, 0.03), "g_axe_2h": ew.axe_2handed(),
+         "g_hammer_2h": ew.hammer_2handed(), "g_staff": ew.staff(), "g_wand": ew.wand(), "g_bow": ew.bow_long(),
+         "g_crossbow": ew.crossbow(), "g_shield_round": ew.shield_round(), "g_shield_kite": ew.shield_kite(), "g_spellbook": ew.spellbook_open()}
+    for k, parts in W.items():
+        save(k, parts)
+    armor = os.path.join(ROOT, "Models", "armor")
+    for st in ("leather", "plate"):
+        for slot in ("head", "shoulders", "chest", "hands", "legs", "feet"):
+            src = os.path.join(armor, f"{st}_{slot}_clovek.glb")
+            if not os.path.exists(src):
+                continue
+            b = open(src, "rb").read()
+            jl = _struct.unpack("<I", b[12:16])[0]
+            j = _json.loads(b[20:20 + jl])
+            bin_ = bytearray(b[20 + jl + 8:])
+            def acc(i, comps):
+                a = j["accessors"][i]
+                v = j["bufferViews"][a["bufferView"]]
+                o = v.get("byteOffset", 0) + a.get("byteOffset", 0)
+                dt = {5126: np.float32, 5125: np.uint32, 5123: np.uint16}[a["componentType"]]
+                return np.frombuffer(bytes(bin_[o:o + a["count"] * comps * np.dtype(dt).itemsize]), dtype=dt).reshape(a["count"], comps).astype(np.float64 if dt == np.float32 else np.int64)
+            prims = j["meshes"][0]["primitives"]
+            data = []
+            for p in prims:
+                P = acc(p["attributes"]["POSITION"], 3)
+                F = acc(p["indices"], 1).reshape(-1, 3)
+                data.append((P, F))
+            allP = np.concatenate([d[0] for d in data])
+            # rukavice a boty: jen pravý kus (postava kouká po +Z, pravá strana je −X)
+            keep_right = slot in ("hands", "feet")
+            sel = (allP[:, 0] < 0) if keep_right else np.ones(len(allP), bool)
+            lo, hi = allP[sel].min(0), allP[sel].max(0)
+            c = (lo + hi) / 2
+            r = float(np.linalg.norm(hi - lo)) / 2
+            out = {"asset": {"version": "2.0"}, "nodes": [{"mesh": 0}], "meshes": [{"primitives": []}], "materials": j["materials"],
+                   "images": [{"uri": "../armor/" + im["uri"]} for im in j["images"]], "textures": j["textures"], "samplers": j["samplers"],
+                   "accessors": [], "bufferViews": [], "buffers": [], "scenes": [{"nodes": [0]}], "scene": 0}
+            ob = bytearray()
+            def add(arr, typ, comp, target=None, mm=False):
+                while len(ob) % 4:
+                    ob.extend(b"\0")
+                off = len(ob)
+                raw = np.ascontiguousarray(arr).tobytes()
+                ob.extend(raw)
+                out["bufferViews"].append({"buffer": 0, "byteOffset": off, "byteLength": len(raw), **({"target": target} if target else {})})
+                a = {"bufferView": len(out["bufferViews"]) - 1, "componentType": comp, "count": int(len(arr)), "type": typ}
+                if mm:
+                    a["min"] = arr.min(0).tolist(); a["max"] = arr.max(0).tolist()
+                out["accessors"].append(a)
+                return len(out["accessors"]) - 1
+            for p, (P, F) in zip(prims, data):
+                if keep_right:
+                    ok = (P[F][:, :, 0] < 0).all(axis=1)
+                    F = F[ok]
+                if not len(F):
+                    continue
+                Q = ((P - c) * (0.5 / r)).astype(np.float32)
+                N = acc(p["attributes"]["NORMAL"], 3).astype(np.float32)
+                UV = acc(p["attributes"]["TEXCOORD_0"], 2).astype(np.float32)
+                out["meshes"][0]["primitives"].append({"attributes": {"POSITION": add(Q, "VEC3", 5126, 34962, True), "NORMAL": add(N, "VEC3", 5126, 34962),
+                                                                      "TEXCOORD_0": add(UV, "VEC2", 5126, 34962)},
+                                                       "indices": add(F.reshape(-1).astype(np.uint32), "SCALAR", 5125, 34963), "material": p["material"]})
+            while len(ob) % 4:
+                ob.extend(b"\0")
+            out["buffers"] = [{"byteLength": len(ob)}]
+            js = _json.dumps(out).encode()
+            js += b" " * ((4 - len(js) % 4) % 4)
+            with open(os.path.join(OUT, f"g_{st}_{slot}.glb"), "wb") as f:
+                f.write(_struct.pack("<III", 0x46546C67, 2, 12 + 8 + len(js) + 8 + len(ob)))
+                f.write(_struct.pack("<I4s", len(js), b"JSON")); f.write(js)
+                f.write(_struct.pack("<I4s", len(ob), b"BIN\0")); f.write(ob)
+    print("ikony výbavy: hotovo")
+
+
+if __name__ == "__main__" and "--gear" in sys.argv:
+    gear_icons()

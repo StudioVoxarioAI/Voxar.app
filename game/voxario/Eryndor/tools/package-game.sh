@@ -27,6 +27,8 @@ find "$bin" -maxdepth 1 -type f \( -name "*.dll" -o -name "libnvidia-ngx-dlss.so
 [ -d "$bin/licenses" ] && cp -r "$bin/licenses" "$out/licenses"
 [ -d "$bin/../share/voxario-studio/licenses" ] && cp -r "$bin/../share/voxario-studio/licenses" "$out/licenses"
 cp -r "$here/Assets" "$out/GameData"
+# modely jen pro focení ikon (samotest „ikony“) – ve hře se nepoužijí
+rm -rf "$out/GameData/Models/icons"
 cat > "$out/game.vgame" <<EOV
 {
   "Name": "Eryndor",

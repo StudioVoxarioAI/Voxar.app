@@ -81,10 +81,26 @@ function Selftest()
             if n:find("^herb") then rx, ry, rz = 14, 20, 0 end
             items[#items + 1] = { n, "Models/icons/" .. n .. ".glb", nil, rx, ry, rz, 0 }
         end
+        if game.env and game.env("VOXARIO_IKONY_GEAR") then
+            -- výbava: zbraně (rukojeť v počátku, čepel +Y) a kusy zbroje z Armor Forge (v klidové póze člověka)
+            items = {}
+            for _, n in ipairs({ "sword_1h", "axe_1h", "mace_1h", "dagger", "sword_2h", "axe_2h", "hammer_2h", "staff", "wand", "bow",
+                                 "crossbow", "shield_round", "shield_kite", "spellbook" }) do
+                local rx, ry, rz = 10, 20, -42
+                if n:find("shield") then rx, ry, rz = 0, 25, 0 elseif n == "spellbook" then rx, ry, rz = 30, 0, 0
+                elseif n == "crossbow" then rx, ry, rz = 25, 55, 0 elseif n == "bow" then rx, ry, rz = 0, 0, -35 end
+                items[#items + 1] = { "g_" .. n, "Models/icons/g_" .. n .. ".glb", nil, rx, ry, rz, 0 }
+            end
+            for _, set in ipairs({ "leather", "plate" }) do
+                for _, slot in ipairs({ "head", "shoulders", "chest", "hands", "legs", "feet" }) do
+                    items[#items + 1] = { "g_" .. set .. "_" .. slot, "Models/icons/g_" .. set .. "_" .. slot .. ".glb", nil, 8, 25, 0, 0 }
+                end
+            end
+        end
         local pick = game.env and game.env("VOXARIO_IKONY")
         for _, it in ipairs(items) do
             if not pick or pick:find(it[1], 1, true) then
-                local id = _G.world.spawn(it[2], ox, oy + it[7], oz, { fit = it[3], name = it[1] })
+                local id = _G.world.spawn(it[2], ox, oy + it[7], oz, { fit = it[3], name = it[1], scale = it[8] })
                 entity.set_rotation(id, it[4], yaw0 + it[5], it[6])
                 if it[1] == "wolf_pet" then anim.play(id, "Idle_Look", 0, true) end
                 timer.wait_until(function() return _G.world.loading() == 0 end)
@@ -390,6 +406,179 @@ function Selftest()
                 entity.bone_rotate(player.view, "jaw")
             end
         end
+        game.log("SELFTEST hotovo")
+        game.quit()
+        return
+    end
+    if only == "vystroj" then
+        -- výbava: zbroj z Armor Forge na rase, zbraně v rukou podle sady animací (engine ≥ 1.32)
+        game_.SetMode("test")
+        local race = game.env("VOXARIO_RACE") or "clovek"
+        local S = map.Start
+        local x, z = S.x + 12, S.z - 20
+        local y = G(x, z)
+        _G.world.environment({ time_of_day = 11 })
+        local id = _G.world.spawn("Models/races/" .. race .. ".glb", x, y, z, { yaw = 0, name = "test" })
+        local parts, weapons = {}, {}
+        local function clear()
+            for _, p in ipairs(parts) do entity.destroy(p) end
+            for _, w in ipairs(weapons) do entity.destroy(w) end
+            parts, weapons = {}, {}
+        end
+        local function wear(set)
+            for _, slot in ipairs({ "head", "shoulders", "chest", "hands", "legs", "feet" }) do
+                local p = _G.world.spawn("Models/armor/" .. set .. "_" .. slot .. "_" .. race .. ".glb", x, y, z, { name = set .. slot })
+                entity.equip(p, id)
+                parts[#parts + 1] = p
+            end
+        end
+        local function hold(side, model)
+            local w = _G.world.spawn("Models/gear/real/" .. model .. ".glb", 0, 0, 0, { name = model })
+            entity.attach(w, id, side == "r" and "handslot.r" or "handslot.l")
+            entity.set_position(w, 0, 0, 0); entity.set_rotation(w, 0, 0, 0)
+            weapons[#weapons + 1] = w
+        end
+        local function cam(name, yaw, dist, h)
+            local r = math.rad(yaw)
+            lookFrom(x + math.sin(r) * dist, y + h, z + math.cos(r) * dist, x, y + 1.0, z)
+            timer.sleep(0.6); shot(name)
+        end
+        local looks = {
+            { "u", nil, nil, "Idle", "plate" },
+            { "1hs", "sword_1handed", "shield_kite", "Idle_1HS", "plate" },
+            { "2h", "sword_2handed", nil, "2H_Melee_Idle_2H", "plate" },
+            { "dw", "axe_1handed", "dagger", "Idle_DW", "leather" },
+            { "st", "staff", nil, "Idle_ST", "leather" },
+            { "bow", nil, "bow_long", "Idle_BOW", "leather" },
+        }
+        for _, l in ipairs(looks) do
+            clear()
+            wear(l[5])
+            if l[2] then hold("r", l[2]) end
+            if l[3] then hold("l", l[3]) end
+            anim.play(id, l[4], 0, true)
+            timer.wait_until(function() return _G.world.loading() == 0 end)
+            timer.sleep(1.2)
+            cam("v-" .. l[1] .. "-predek", 0, 3.4, 1.4)
+            cam("v-" .. l[1] .. "-bok", 70, 3.4, 1.4)
+            cam("v-" .. l[1] .. "-zada", 180, 3.4, 1.6)
+        end
+        anim.play(id, "1H_Melee_Attack_Chop", 0, true)
+        clear(); wear("plate"); hold("r", "sword_1handed"); hold("l", "shield_kite")
+        timer.sleep(1.4); cam("v-utok", 30, 3.2, 1.4)
+        game.log("SELFTEST hotovo")
+        game.quit()
+        return
+    end
+    if only == "vybava" then
+        -- MMO výbava: start bez zbraní, kořist, sebrání, vybavení, zasunutí / tasení, okno postavy, vylepšení
+        local inv = require("eryndor.inventory")
+        local eq = require("eryndor.equipment")
+        local lt = require("eryndor.loot")
+        local it = require("eryndor.items")
+        local cw = require("eryndor.charwin")
+        if settings then settings.set("eryndor.equipment", {}); settings.set("eryndor.inventory", {}) end
+        _G.world.environment({ time_of_day = 13 })
+        game_.EnterWorld(1)
+        game_.noWeather = true
+        game_.freeCam = true
+        local S = map.Start
+        player.Teleport(S.x + 14, S.z - 24)
+        timer.sleep(2)
+        local function behind(dist, h, side)
+            local x, y, z = player.Pos()
+            local f = math.rad(player.facing + (side or 0))
+            lookFrom(x - math.sin(f) * dist, (player.viewY or y) + h, z - math.cos(f) * dist, x, (player.viewY or y) + 1.0, z)
+        end
+        local n = 0
+        for _, sl in ipairs(it.Slots) do if eq.slots[sl] then n = n + 1 end end
+        game.log("start: vybavených slotů " .. n .. ", zbraň " .. tostring(eq.WeaponKind()))
+        behind(3.4, 1.6, 180); timer.sleep(0.8); shot("x1-start-bez-vybavy")
+        -- vlk -> kořist
+        local x, _, z = player.Pos()
+        local w = combat.SpawnMob("wolf", x + 2.2, z + 1.5)
+        timer.sleep(1)
+        combat.HitMob(w, 9999)
+        timer.sleep(1.5)
+        lt.Drop(it.Roll("plate_chest", 3, "epic"), x + 1, z + 1)
+        lt.Drop(it.Roll("shield_kite", 3, "rare"), x + 1.5, z)
+        timer.sleep(1)
+        lookFrom(x - 4, G(x, z) + 2.4, z - 3, x + 1.5, G(x, z) + 0.3, z + 1); timer.sleep(1); shot("x2-korist-na-zemi")
+        game.log("kořist na zemi: " .. #lt.list)
+        for _ = 1, 6 do
+            if #lt.list == 0 then break end
+            local d = lt.list[1]
+            player.Teleport(d.x + 0.5, d.z)
+            timer.sleep(0.3)
+            lt.PickUp(d.x, d.z)
+        end
+        -- vše z tašky vybavit (pravé tlačítko = eq.Equip)
+        for i = 1, inv.size do if inv.slots[i] and inv.slots[i].g then eq.Equip(i) end end
+        for _, set in ipairs({ "plate" }) do
+            for _, sl in ipairs({ "head", "shoulders", "hands", "legs", "feet" }) do
+                inv.PutGear(it.Roll(set .. "_" .. sl, 3, "rare"))
+            end
+        end
+        for i = 1, inv.size do if inv.slots[i] and inv.slots[i].g then eq.Equip(i) end end
+        game.log("vybaveno: zbraň " .. tostring(eq.WeaponKind()) .. ", útok " .. tostring((combat.me.gear or {}).atk) .. ", obrana " .. tostring((combat.me.gear or {}).def))
+        timer.sleep(2)
+        behind(3.4, 1.6, 180); timer.sleep(0.8); shot("x3-vybaven-zasunuto-zepredu")
+        behind(3.4, 1.6, 0); timer.sleep(0.4); shot("x4-vybaven-zasunuto-zezadu")
+        eq.SetDrawn(true)
+        timer.sleep(1.2)
+        behind(3.4, 1.6, 150); timer.sleep(0.4); shot("x5-taseno")
+        player.Action("1H_Melee_Attack_Chop", 0.9)
+        timer.sleep(0.45); behind(3.4, 1.6, 140); shot("x6-utok")
+        eq.SetDrawn(false)
+        -- vylepšení: rudy do tašky, +1 až +5 na meč
+        inv.Add("ore_silver", 20, true)
+        cw.open = true
+        cw.sel = "main"
+        for _ = 1, 5 do
+            local item = eq.slots.main
+            local mat, need = it.UpgradeMaterial((item.g.enh or 0) + 1)
+            local r = it.UpgradeItem(item, { id = mat, have = inv.Count(mat) })
+            if r.used then inv.Remove(mat, r.used) end
+            game.log("vylepšení: " .. r.msg)
+        end
+        eq.Changed()
+        inv.open = true
+        timer.sleep(1.0)
+        lookFrom(x + 3, G(x, z) + 1.6, z + 3, x, G(x, z) + 1, z)
+        timer.sleep(0.6); shot("x7-okno-postavy-a-taska")
+        game.log("meč: " .. it.Name(eq.slots.main) .. " útok " .. tostring(it.Stats(eq.slots.main).atk))
+        game.log("SELFTEST hotovo")
+        game.quit()
+        return
+    end
+    if only == "rasy_vystroj" then
+        -- všechny rasy v plátové / kožené zbroji ze Armor Forge (na míru každé rase)
+        game_.SetMode("test")
+        _G.world.environment({ time_of_day = 11 })
+        local S = map.Start
+        local races = { "clovek", "trpaslik", "elf", "vila", "obr", "kocka", "kocka_zrzava" }
+        local set = game.env("VOXARIO_SET") or "plate"
+        local x0, z = S.x + 10, S.z - 30
+        local ids = {}
+        for i, r in ipairs(races) do
+            local x = x0 + (i - 4) * 1.6
+            local y = G(x, z)
+            local id = _G.world.spawn("Models/races/" .. r .. ".glb", x, y, z, { yaw = 0, name = r })
+            for _, slot in ipairs({ "head", "shoulders", "chest", "hands", "legs", "feet" }) do
+                local p = _G.world.spawn("Models/armor/" .. set .. "_" .. slot .. "_" .. r .. ".glb", x, y, z, { name = slot })
+                entity.equip(p, id)
+            end
+            local w = _G.world.spawn("Models/gear/real/" .. (i % 2 == 0 and "axe_1handed" or "sword_1handed") .. ".glb", 0, 0, 0,
+                { scale = r == "obr" and 1.45 or 1 })
+            entity.attach(w, id, "handslot.r"); entity.set_position(w, 0, 0, 0); entity.set_rotation(w, 0, 0, 0)
+            anim.play(id, i % 3 == 0 and "Walking_A_1H" or "Idle_1H", 0, true)
+            ids[#ids + 1] = id
+        end
+        timer.wait_until(function() return _G.world.loading() == 0 end)
+        timer.sleep(2)
+        local y = G(x0, z)
+        lookFrom(x0, y + 1.6, z + 9.5, x0, y + 1.0, z); timer.sleep(1); shot("r-" .. set .. "-predek")
+        lookFrom(x0, y + 1.8, z - 9.5, x0, y + 1.0, z); timer.sleep(1); shot("r-" .. set .. "-zada")
         game.log("SELFTEST hotovo")
         game.quit()
         return
@@ -1301,6 +1490,9 @@ local pet = require("eryndor.pet")
 local emotes = require("eryndor.emotes")
 local voice = require("eryndor.voice")
 local events = require("eryndor.events")
+local equipment = require("eryndor.equipment")
+local loot = require("eryndor.loot")
+local charwin = require("eryndor.charwin")
 local mode = "select"
 game_.Creator = creator
 
@@ -1319,16 +1511,24 @@ local function enterWorld()
     local rname = require("eryndor.races").Defs[a.race].name
     combat.Log("Vítej ve Valorii, " .. a.name .. " (" .. rname .. ", " .. c.name .. "). Portál tě zavede k Lyrise.", { 0.8, 0.9, 1.0 })
     combat.Log("Tab cíl · R útok · 1–5 dovednosti · Shift sprint · Ctrl chůze · F mluvit · M mapa · pravé tlačítko kamera", { 0.7, 0.7, 0.7 })
-    combat.Log("E těžit / trhat / stahovat / rybařit · B taška · P profese · G emoty · H kůň · K vlk · V mluvit", { 0.7, 0.7, 0.7 })
+    combat.Log("E sebrat / těžit / trhat / stahovat / rybařit · B taška · C postava · P profese · G emoty · H kůň · K vlk · V mluvit", { 0.7, 0.7, 0.7 })
     inventory.Load()
     professions.Load()
     pet.Load()
+    -- výbava: nová postava začíná bez zbraní a zbroje (jen základní oděv rasy); kořist padá z nepřátel
+    equipment.Load()
+    equipment.drawn = false
+    equipment.Recalc()
+    equipment.Refresh()
+    combat.killHooks = combat.killHooks or {}
+    if not combat._lootHooked then combat._lootHooked = true; table.insert(combat.killHooks, function(m) loot.OnKill(m) end) end
     mode = "play"
     game_.mode = mode
     presence.Start(a)
     emotes.onPlay = function(e) presence.Send("emote", { e = e or false }) end
     mount.onChange = function(on) presence.Send("mount", { on = on }) end
     inventory.Actions.fish = function() professions.StartFishing() end
+    equipment.onChange = function() presence.Retrack() end
     inventory.Actions.mount = function() mount.Toggle() end
     inventory.Actions.pet = function() pet.Toggle() end
 end
@@ -1344,6 +1544,9 @@ game_.Preview = function(i)
 end
 -- (samotest) zpět před vstup: hráč, nepřátelé a Lyrise pryč
 game_.Reset = function()
+    loot.Clear()
+    for _, e in ipairs(equipment.visuals.ents or {}) do entity.destroy(e) end
+    equipment.visuals = {}
     mount.Dismount(true)
     pet.Dismiss(true)
     events.Clear()
@@ -1547,8 +1750,10 @@ function on_update(dt)
                 actionbar.HandleKeys()            -- 1–0, -, = : dovednosti, aktivní talenty, lektvary, útok, cíl
             end
             if input.pressed("E") then
-                if not professions.Hook() then mount.Dismount(); professions.Interact() end
+                local lx, _, lz = player.Pos()
+                if not professions.Hook() and not loot.PickUp(lx, lz) then mount.Dismount(); professions.Interact() end
             end
+            if input.pressed("C") and not player.swim then charwin.Toggle() end
             if input.pressed("B") then inventory.Toggle() end
             if input.pressed("P") then professions.Toggle() end
             if input.pressed("G") then emotes.Toggle() end
@@ -1560,6 +1765,7 @@ function on_update(dt)
         if input.pressed("Escape") then
             if menu.open then menu.Toggle()
             elseif emotes.open then emotes.open = false
+            elseif charwin.open then charwin.open = false
             elseif inventory.open then inventory.open = false
             elseif professions.open then professions.open = false
             elseif professions.fishing then professions.StopFishing("Stáhl jsi udici.")
@@ -1587,6 +1793,8 @@ function on_update(dt)
     addons.Fire("update", dt)
     combat.Update(dt)
     professions.Update(dt)
+    equipment.Update(dt)
+    loot.Update(dt)
     mount.Update(dt)
     pet.Update(dt)
     emotes.Update(dt)
@@ -1659,11 +1867,21 @@ function on_gui()
     end
     presence.DrawLabels()
     professions.DrawLabels()
+    loot.DrawLabels()
     mount.DrawLabels()
     pet.DrawLabel()
     events.DrawHud()
     hud.DrawGame()
     professions.DrawHud()
+    do   -- nápověda u kořisti
+        local lx, _, lz = player.Pos()
+        local d = loot.Near(lx, lz)
+        if d then
+            local sw2, sh2 = ui.screen()
+            ui.font("body"); ui.text(sw2 / 2, sh2 - 250, "[E] Sebrat: " .. require("eryndor.items").Name(d.item),
+                { align = "center", color = require("eryndor.items").Color(d.item), shadow = true }); ui.pop_font()
+        end
+    end
     voice.DrawHud()
     hud.DrawQuest(quest.Tracker())
     hud.DrawDialog(quest.dialog)
@@ -1671,6 +1889,7 @@ function on_gui()
     addons.Fire("draw")
     microBar()
     inventory.Draw(widgets)
+    charwin.Draw(widgets)
     professions.Draw(widgets)
     emotes.Draw(widgets)
     talentui.Draw()

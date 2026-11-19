@@ -174,7 +174,7 @@ end
 function M.XpNeed(level) return floor(80 * level ^ 1.6) end
 
 local function stat(s, name)
-    local v = (s[name] or 0) + ((s.mods or {})[name] or 0)
+    local v = (s[name] or 0) + ((s.mods or {})[name] or 0) + ((s.gear or {})[name] or 0)   -- výbava (eryndor.equipment)
     for _, b in pairs(s.buffs or {}) do
         if b.until_t > game.time() then v = v + (b[name] or 0) end
     end
@@ -250,8 +250,9 @@ end
 local function damageMob(m, mult, magic, skill)
     if m.state == "dead" then return end
     local s = M.me
-    local atk = magic and (s.class.matk or s.atk) + (s.level - 1) * 3 + ((s.mods or {}).matk or 0) or stat(s, "atk")
-    local dmg, crit = roll(atk, m.t.def, mult, s.level, m.level, 0.08 + ((s.mods or {}).crit or 0) / 100)
+    local atk = magic and (s.class.matk or s.atk) + (s.level - 1) * 3 + ((s.mods or {}).matk or 0) + ((s.gear or {}).matk or 0) or stat(s, "atk")
+    if not magic and not (s.gear and s.weaponKind) then atk = atk * 0.6 end   -- pěstmi slaběji
+    local dmg, crit = roll(atk, m.t.def, mult, s.level, m.level, 0.08 + (((s.mods or {}).crit or 0) + ((s.gear or {}).crit or 0)) / 100)
     local x, y, z = pos(m.id)
     if not dmg then
         float(x, y + 2.0, z, "Minutí", { 0.8, 0.8, 0.8 }, 20)

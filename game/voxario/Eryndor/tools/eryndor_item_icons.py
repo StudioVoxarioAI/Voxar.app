@@ -177,11 +177,9 @@ def from_shots(folder):
     """Fotorealistické ikony z fotek enginu (samotest „ikony“): čtvercový ořez kolem středu, jemná vinětace,
     kovový rám jako u ikon dovedností."""
     n = 0
-    for name in ITEMS:
+    names = sorted(f[5:-4] for f in os.listdir(folder) if f.startswith("icon-") and f.endswith(".png"))
+    for name in names:
         f = os.path.join(folder, f"icon-{name}.png")
-        if not os.path.exists(f):
-            print("chybí foto:", name)
-            continue
         im = Image.open(f).convert("RGBA")
         w, h = im.size
         c = int(h * 0.56)
