@@ -35,3 +35,6 @@ project_id = "rioexuvgvmdwvidfakxy"
   [functions.stripe-webhook]
     # volá Stripe – ověřuje se podpisem Stripe-Signature
     verify_jwt = false
+
+[functions.connect-live]
+  verify_jwt = false
