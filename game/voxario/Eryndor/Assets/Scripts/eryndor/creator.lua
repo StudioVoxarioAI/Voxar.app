@@ -32,7 +32,11 @@ function M.Respawn()
     for _, w in ipairs(M.items or {}) do entity.destroy(w) end
     local x, y, z = spot()
     local c = cls()
-    M.preview, M.items = races.Spawn(M.a, x, y, z, { yaw = 180 + M.rot, name = "Náhled", right = c.look.right, left = c.look.left })
+    -- náhled jako ve hře: nová postava je bez zbraní a zbroje (jen základní oděv rasy)
+    local bare = {}
+    for k, v in pairs(M.a) do bare[k] = v end
+    bare.gear = false
+    M.preview, M.items = races.Spawn(bare, x, y, z, { yaw = 180 + M.rot, name = "Náhled" })
     M.Pose(M.pose or "Idle")
     M.rebuild = false
 end
@@ -220,11 +224,9 @@ function M.Draw()
                 hexInput("tint")
                 slider("Síla nádechu", "tintAmount", 0, 1)
                 ui.spacing()
-                ui.label("Výbava rasy", GOLD)
-                local gv, gch = ui.checkbox("Zbraně a zbroj rasy##gear", M.a.gear ~= false)
-                if gch then M.a.gear = gv; M.rebuild = true end
-                local gd = races.Gear[M.a.race]
-                if gd then ui.text_wrapped(M.a.gear ~= false and gd.label or "Zbraně podle povolání", DIM) end
+                ui.label("Výbava", GOLD)
+                ui.text_wrapped("Postava začíná bez zbraní a zbroje, jen v základním oděvu. Výbavu získáš z nepřátel " ..
+                    "a v okně postavy (C) ji vybavíš a vylepšíš.", DIM)
                 ui.spacing()
                 ui.label("Magická záře (Aetherium)", GOLD)
                 color("Barva záře", "glowColor", { "#7fdfff", "#b06cff", "#ff8a3a", "#7dff9a" })

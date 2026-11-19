@@ -237,6 +237,53 @@ def wand():
             (cone(0.012, 0.04, 6).translate(0, 0.28, 0), CRYSTAL)]
 
 
+def axe_1handed():
+    """Jednoruční válečná sekera: topůrko 0,62 m, bradatice na +X."""
+    wood = [lathe([(0.017, -0.12), (0.016, 0.2), (0.019, 0.46), (0.021, 0.52)], 12, True, True)]
+    edge = [(0.02, 0.05), (0.07, 0.06), (0.13, 0.1), (0.16, 0.07), (0.17, -0.02), (0.15, -0.09), (0.1, -0.1), (0.05, -0.04), (0.02, -0.03)]
+    head = [extrude([(x, y + 0.45) for x, y in edge], -0.009, 0.009),
+            extrude([(-0.02, 0.48), (-0.07, 0.47), (-0.075, 0.43), (-0.02, 0.42)], -0.012, 0.012),
+            cylinder(0.026, 0.026, 0.1, 12).translate(0, 0.4, 0)]
+    return [(merge(*wood), WOOD), (merge(*head), STEEL), (merge(grip(0.12, 0.019, -0.12)), LEATHER)]
+
+
+def mace_1handed():
+    """Palcát: násada 0,55 m, hlavice s osmi břity (flanže)."""
+    shaft = [cylinder(0.016, 0.016, 0.5, 12).translate(0, -0.08, 0)]
+    head = [lathe([(0.03, 0.4), (0.042, 0.44), (0.045, 0.5), (0.03, 0.56), (0.012, 0.58)], 16, True, True)]
+    for k in range(8):
+        a = k / 8 * 360
+        head.append(extrude([(0.03, 0.42), (0.085, 0.45), (0.088, 0.53), (0.03, 0.56)], -0.005, 0.005).rotate(0, a, 0))
+    pommel = [sphere(0.024, 12, 8).translate(0, -0.11, 0)]
+    return [(merge(*shaft), DARK_STEEL), (merge(*head), STEEL), (merge(grip(0.13, 0.018, -0.1), *pommel), LEATHER)]
+
+
+def hammer_2handed():
+    """Obouruční válečné kladivo: násada 1,2 m, hranatá hlava s hrotem."""
+    wood = [cylinder(0.022, 0.02, 1.15, 12).translate(0, -0.35, 0)]
+    head = [box(0.3, 0.14, 0.14, center=(0, 0.82, 0), bevel=0.012),
+            cone(0.05, 0.16, 8).rotate(0, 0, -90).translate(0.15, 0.82, 0),
+            box(0.06, 0.18, 0.18, center=(-0.16, 0.82, 0), bevel=0.01),
+            cylinder(0.036, 0.036, 0.16, 12).translate(0, 0.66, 0)]
+    bands = [cylinder(0.026, 0.026, 0.03, 12).translate(0, y, 0) for y in (-0.36, 0.0, 0.3)]
+    return [(merge(*wood), WOOD), (merge(*head), DARK_STEEL), (merge(*bands), BRASS), (merge(grip(0.34, 0.024, -0.34)), LEATHER)]
+
+
+def shield_kite():
+    """Erbovní (kite) štít: líc k +Z, úchop vzadu v počátku, špička dolů."""
+    outline = [(0.0, 0.34), (0.2, 0.31), (0.27, 0.2), (0.26, 0.0), (0.18, -0.25), (0.0, -0.46), (-0.18, -0.25), (-0.26, 0.0), (-0.27, 0.2), (-0.2, 0.31)]
+    body = extrude(outline, 0.0, 0.035, 0.92)
+    body.apply(lambda P: P + np.array([0, 0, 1]) * (0.05 * (1 - (P[:, 0:1] / 0.27) ** 2)))   # vypouklý líc
+    body.invalidate()
+    rim = []
+    for (x0, y0), (x1, y1) in zip(outline, outline[1:] + outline[:1]):
+        L = math.hypot(x1 - x0, y1 - y0)
+        rim.append(box(0.022, L + 0.01, 0.05).rotate(0, 0, -math.degrees(math.atan2(x1 - x0, y1 - y0))).translate((x0 + x1) / 2, (y0 + y1) / 2, 0.03))
+    boss = lathe([(0.05, 0.0), (0.045, 0.02), (0.02, 0.04), (1e-4, 0.045)], 20, True, True).rotate(-90, 0, 0).translate(0, 0.02, 0.08)
+    handle = [box(0.03, 0.14, 0.03).translate(0, 0, -0.03)]
+    return [(body, PLANKS), (merge(*rim, boss), STEEL), (merge(*handle), LEATHER)]
+
+
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
     items = {
@@ -251,6 +298,10 @@ def main():
         "wand": wand(),
         "bow_long": bow_long(),
         "quiver": quiver(),
+        "axe_1handed": axe_1handed(),
+        "mace_1handed": mace_1handed(),
+        "hammer_2handed": hammer_2handed(),
+        "shield_kite": shield_kite(),
     }
     for name, parts in items.items():
         write_glb(str(OUT / f"{name}.glb"), parts, name=name)

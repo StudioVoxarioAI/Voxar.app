@@ -26,7 +26,8 @@ M.Defs = {
         desc = "Kočkovití válečníci a lovci z horských průsmyků. Pružný krok, bleskové výpady a ostré smysly.",
         variants = { { "kocka", "Sněžný levhart" }, { "kocka_zrzava", "Zrzavý mourek" } } },
 }
--- výbava rasy (Meshy z obrázku výbavy, Models/gear): zbraně do rukou, zbroj se oblékne na kostru (entity.equip)
+-- dřívější výbava rasy (Meshy z obrázku výbavy, Models/gear) – hra ji už nenasazuje: postava začíná bez výbavy a
+-- zbraně / zbroj nosí podle vybavení (eryndor.equipment, fotorealistické modely enginu). `scale` = velikost zbraní v rukou.
 M.Gear = {
     clovek = { right = "gear/mec_dlouhy", left = "shield", armor = "kyrys", label = "Dlouhý meč, štít, ocelový kyrys" },
     trpaslik = { right = "gear/kladivo", armor = "krouzkova", label = "Válečné kladivo, kroužková košile" },

@@ -33,7 +33,7 @@ local function track()
     local x, _, z = player.Pos()
     local c = player.class or {}
     channel:track({ uid = uid, name = appearance.name, race = appearance.race, cls = c.id or "knight",
-                    level = combat.me and combat.me.level or 1, a = races.Pack(appearance),
+                    level = combat.me and combat.me.level or 1, a = races.Pack(appearance), eq = require("eryndor.equipment").Pack(),
                     x = r2(x), z = r2(z), ry = r2(player.facing or 0) })
 end
 
@@ -42,6 +42,7 @@ local function leave(key)
     if not o then return end
     if o.id then entity.destroy(o.id) end
     for _, w in ipairs(o.items or {}) do entity.destroy(w) end
+    for _, w in ipairs(o.vis and o.vis.ents or {}) do entity.destroy(w) end
     if o.horse then entity.destroy(o.horse) end
     if o.saddle then entity.destroy(o.saddle) end
     if o.voice and audio then audio.stop(o.voice) end
@@ -63,25 +64,51 @@ local function join(key, metas)
     local c = classById(meta.cls)
     local o = M.others[key]
     local sig = json and json.encode and json.encode(meta.a) or tostring(meta.a)
+    local eqsig = json and json.encode and json.encode(meta.eq or {}) or ""
     if o then
         o.level = tonumber(meta.level) or o.level
-        if o.sig == sig then return end   -- vzhled beze změny
+        if o.sig == sig then
+            if o.eqsig ~= eqsig then   -- jen jiná výbava: převléknout
+                o.eqsig, o.eq = eqsig, require("eryndor.equipment").Unpack(meta.eq)
+                require("eryndor.equipment").Apply(o.id, o.vis, o.eq, o.raceModel, o.drawn, o.gearScale)
+                o.weapons = o.vis.weapons
+            end
+            return
+        end
         leave(key)
     end
     local x, z = tonumber(meta.x) or map.Start.x, tonumber(meta.z) or map.Start.z
     o = { a = a, name = a.name, race = a.race, cls = c, level = tonumber(meta.level) or 1, sig = sig, height = a.height,
           pos = { x, z }, target = { x, z }, vel = { 0, 0 }, stamp = game.time(), yaw = tonumber(meta.ry) or 0,
           ry = tonumber(meta.ry) or 0 }
-    o.id, o.items, o.weapons = races.Spawn(a, x, ground(x, z), z, { yaw = o.yaw, name = a.name, tag = "other_player",
-                                                        right = c.look.right, left = c.look.left })
+    local bare = {}
+    for k, v in pairs(a) do bare[k] = v end
+    bare.gear = false
+    o.id, o.items = races.Spawn(bare, x, ground(x, z), z, { yaw = o.yaw, name = a.name, tag = "other_player" })
+    -- výbava jiného hráče (zbroj a zbraně podle jeho vybavení)
+    local v = (races.Defs[a.race] or {}).variants
+    o.raceModel = v and v[a.variant or 1] and v[a.variant or 1][1] or a.race
+    o.gearScale = (races.Gear[a.race] or {}).scale or 1
+    o.vis, o.eq, o.eqsig, o.drawn = {}, require("eryndor.equipment").Unpack(meta.eq), eqsig, false
+    require("eryndor.equipment").Apply(o.id, o.vis, o.eq, o.raceModel, false, o.gearScale)
+    o.weapons = o.vis.weapons
     o.anim = nil
     M.others[key] = o
     M.count = M.count + 1
     combat.Log(a.name .. " (" .. races.Defs[a.race].name .. ") je v Aethelgardu.", { 0.6, 0.85, 1.0 })
 end
 
+local function clipSet(o)
+    if not o.drawn then return "" end
+    local items = require("eryndor.items")
+    local m, f = o.eq.main and items.Base[o.eq.main.id], o.eq.off and items.Base[o.eq.off.id]
+    if not m then return (f and f.kind == "shield") and "_1HS" or "" end
+    local k = items.Kinds[m.kind]
+    if k.set == "_1H" and f then return f.kind == "shield" and "_1HS" or "_DW" end
+    return k.set or ""
+end
 local function play(o, clip, loop)
-    clip = player.Clip(clip, o.cls, o.a)
+    clip = player.Clip(clip, clipSet(o))
     if o.anim == clip then return end
     o.anim = clip
     anim.play(o.id, clip, 0.15, loop ~= false)
@@ -123,6 +150,13 @@ function M.Start(a)
             if not o or type(p.clip) ~= "string" or #p.clip > 48 then return end
             o.anim = p.clip
             o.actionT = game.time() + math.min(tonumber(p.dur) or 0.8, 3)
+            if p.clip:match("Attack") or p.clip:match("Spellcast") or p.clip:match("Ranged") then   -- v boji tasí zbraň
+                o.drawnUntil = game.time() + 6
+                if not o.drawn then
+                    o.drawn = true
+                    require("eryndor.equipment").Apply(o.id, o.vis, o.eq, o.raceModel, true, o.gearScale)
+                end
+            end
             anim.play(o.id, p.clip, 0.08, false, true)
         end)
         -- emoty, hlas a jízda na koni ostatních hráčů
@@ -225,6 +259,11 @@ function M.Update(dt)
         if o.horse then   -- jede na koni: kůň nese postavu
             require("eryndor.mount").PoseEntities(o.horse, o.saddle, o.id, o.pos[1], ground(o.pos[1], o.pos[2]), o.pos[2], o.yaw, spd, o, dt)
             goto continue
+        end
+        if o.drawn and now > (o.drawnUntil or 0) then
+            o.drawn = false
+            require("eryndor.equipment").Apply(o.id, o.vis, o.eq, o.raceModel, false, o.gearScale)
+            o.anim = nil
         end
         if o.emote and spd > 0.6 then require("eryndor.emotes").Stop(o.id); o.emote = nil end
         entity.set_position(o.id, o.pos[1], ground(o.pos[1], o.pos[2]), o.pos[2])
